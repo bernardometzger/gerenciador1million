@@ -9,9 +9,9 @@
 <title>Passo a Passo</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap">
 <style>
-/* Layout: barra fixa com abas (Empresa / Pessoal) e alternância Quadro / Lista;
-   abaixo, quadro de 3 colunas ou lista ordenada por prioridade; a tarefa abre
-   num painel lateral onde mora o passo a passo. */
+/* Layout: barra fixa com abas (Empresa / Pessoal) e período (Tudo / Semana / Hoje);
+   abaixo, lista ordenada por prioridade. Clicar numa tarefa "entra" nela: uma
+   página inteira com as subtarefas em primeiro plano e os detalhes recolhidos. */
 :root{
   --bg:#d6dde6; --surface:#ffffff; --sunken:#e4e9ef; --ink:#131c26; --muted:#4f5c6a; --line:#b4c0cd;
   --accent:#1f4fd8; --accent-ink:#ffffff; --accent-soft:#e2e9fc;
@@ -119,8 +119,13 @@ select,input[type=text],input[type=date],textarea{background:var(--surface);bord
 .empty p{color:var(--muted);max-width:46ch}
 
 .scrim{position:fixed;inset:0;background:rgba(8,12,18,.5);z-index:10}
-.panel{position:fixed;top:0;right:0;bottom:0;width:min(540px,100%);background:var(--bg);z-index:11;overflow-y:auto;
-  padding:calc(14px + env(safe-area-inset-top,0px)) 18px calc(20px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px;box-shadow:-8px 0 30px rgba(0,0,0,.2)}
+.panel{position:fixed;inset:0;background:var(--bg);z-index:11;overflow-y:auto;
+  padding:calc(14px + env(safe-area-inset-top,0px)) 16px calc(28px + env(safe-area-inset-bottom,0px))}
+.panel-in{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.det{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.det summary{cursor:pointer;font-weight:600}
+.det summary span{font-weight:400;font-size:13px;color:var(--muted);margin-left:6px}
+.det-in{display:flex;flex-direction:column;gap:10px;margin-top:12px}
 .panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .save{font-size:13px;color:var(--muted)}
 .f-title{font-family:var(--display);font-size:22px;font-weight:700;width:100%;padding:9px 11px}
@@ -132,17 +137,17 @@ select,input[type=text],input[type=date],textarea{background:var(--surface);bord
 .sec h4 span{font-family:var(--body);font-size:13px;font-weight:400;color:var(--muted)}
 .sec{display:flex;flex-direction:column;gap:8px}
 .edit-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;counter-reset:s}
-.edit-steps li{display:flex;align-items:center;gap:6px;counter-increment:s}
+.edit-steps li{display:flex;align-items:center;gap:6px;counter-increment:s;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:5px 6px 5px 8px;min-width:0}
 .edit-steps li::before{content:counter(s);width:18px;text-align:right;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none}
-.edit-steps input[type=checkbox]{accent-color:var(--ok);flex:none;width:17px;height:17px}
-.edit-steps input[type=text]{flex:1}
+.edit-steps input[type=checkbox]{accent-color:var(--ok);flex:none;width:20px;height:20px}
+.edit-steps input[type=text]{flex:1;border-color:transparent;background:transparent;padding:6px}
 .edit-steps input.sd{text-decoration:line-through;color:var(--muted)}
 .mini{flex:none;border:0;background:transparent;color:var(--muted);width:28px;height:30px;border-radius:6px;padding:0}
 .mini:hover{background:var(--sunken);color:var(--ink)}
 .addstep{display:flex;gap:6px}
-.addstep input{flex:1}
+.addstep input{flex:1;padding:10px 11px}
 .hint{font-size:13px;color:var(--muted)}
-.panel-foot{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-top:auto;padding-top:8px}
+.panel-foot{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-start;padding-top:8px}
 
 .dialog{position:fixed;z-index:11;left:50%;top:50%;transform:translate(-50%,-50%);width:min(420px,calc(100% - 32px));max-height:calc(100% - 32px);overflow:auto;
   background:var(--surface);border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow)}
@@ -339,15 +344,16 @@ function cardHtml(t){
     (nx?'<p class="next"><b>Próximo passo:</b> '+esc(nx.text)+'</p>':'')+progress(t)+chips(t)+'</article>';
 }
 function rowHtml(t){
-  const n=t.steps.filter(s=>s.done).length, open=S.expanded.has(t.id), done=t.status==='feito';
+  const open=S.expanded.has(t.id), done=t.status==='feito', nx=done?null:t.steps.find(s=>!s.done);
   const wk=S.period==='semana'&&!done, td=ymd(new Date());
   let h='<li class="row'+(done?' done':'')+'"'+(wk?' draggable="true" data-drag="'+t.id+'"':'')+'><div class="row-top">'+
     '<button class="tick" data-act="toggle-done" data-id="'+t.id+'" aria-label="'+(done?'Reabrir tarefa':'Concluir tarefa')+'">'+(done?'✓':'')+'</button>'+
-    '<button class="row-main" data-act="open" data-id="'+t.id+'"><span class="row-title">'+esc(t.title)+'</span>'+chips(t)+'</button>'+
+    '<button class="row-main" data-act="open" data-id="'+t.id+'" title="Abrir a tarefa e ver as subtarefas"><span class="row-title">'+esc(t.title)+'</span>'+
+    (nx&&!open?'<span class="next"><b>Próxima:</b> '+esc(nx.text)+'</span>':'')+chips(t)+progress(t)+'</button>'+
     (wk&&t.due>td?'<button class="exp" data-act="shift" data-d="-1" data-id="'+t.id+'" aria-label="Adiantar um dia" title="Adiantar um dia">← Antes</button>':'')+
     (wk?'<button class="exp" data-act="shift" data-d="1" data-id="'+t.id+'" aria-label="Adiar um dia" title="Adiar um dia">Depois →</button>':'')+
     (!done&&t.due!==td?'<button class="exp today-btn" data-act="today" data-id="'+t.id+'" title="Mudar o prazo para hoje">Fazer hoje</button>':'')+
-    (t.steps.length?'<button class="exp" data-act="expand" data-id="'+t.id+'" aria-expanded="'+open+'">'+n+'/'+t.steps.length+' passos '+(open?'▴':'▾')+'</button>':'')+'</div>';
+    (t.steps.length?'<button class="exp" data-act="expand" data-id="'+t.id+'" aria-expanded="'+open+'">Subtarefas '+(open?'▴':'▾')+'</button>':'')+'</div>';
   if(open&&t.steps.length){
     h+='<ol class="steps">'+t.steps.map(s=>'<li><label><input type="checkbox" data-step="'+s.id+'" data-id="'+t.id+'"'+(s.done?' checked':'')+'><span'+(s.done?' class="sd"':'')+'>'+esc(s.text)+'</span></label></li>').join('')+'</ol>';
   }
@@ -385,7 +391,7 @@ function render(){
   if(!ts.length){
     const filtered=S.fPrio||S.fWho||S.period!=='tudo';
     h+='<div class="empty"><h2>'+(S.period==='hoje'?'Nada com prazo até hoje':S.period==='semana'?'Nada com prazo até domingo':filtered?'Nada com esses filtros':S.tab==='empresa'?'Nenhuma tarefa da empresa ainda':'Nenhuma tarefa por aqui ainda')+'</h2>'+
-      '<p>'+(S.period!=='tudo'?'Em "Tudo" você vê as demais tarefas e pode trazer qualquer uma para hoje.':filtered?'Mude os filtros acima para ver outras tarefas.':'Crie a primeira tarefa e quebre em passos pequenos. Depois é só abrir e executar, um passo de cada vez.')+'</p>'+
+      '<p>'+(S.period!=='tudo'?'Em "Tudo" você vê as demais tarefas e pode trazer qualquer uma para hoje.':filtered?'Mude os filtros acima para ver outras tarefas.':'Crie a primeira tarefa e quebre em subtarefas pequenas. Depois é só abrir e executar, uma de cada vez.')+'</p>'+
       (filtered?'':'<button class="btn primary" data-act="new">Criar a primeira tarefa</button>')+'</div>';
   }else{
     const open=ts.filter(t=>t.status!=='feito'), done=ts.filter(t=>t.status==='feito');
@@ -450,9 +456,14 @@ function openTask(id,status){
 }
 function renderSheet(){
   const d=S.draft, el=$('#sheet'); el.hidden=false;
-  el.innerHTML='<div class="scrim" data-act="close-sheet"></div><aside class="panel" role="dialog" aria-modal="true" aria-label="Tarefa">'+
-    '<div class="panel-head"><span class="save" id="saveState">'+(S.isNew?'Nova tarefa':'As alterações são salvas sozinhas')+'</span><button class="btn ghost" data-act="close-sheet">Fechar</button></div>'+
+  el.innerHTML='<aside class="panel" role="dialog" aria-modal="true" aria-label="Tarefa"><div class="panel-in">'+
+    '<div class="panel-head"><button class="btn ghost" data-act="close-sheet">← Voltar</button><span class="save" id="saveState">'+(S.isNew?'Nova tarefa':'As alterações são salvas sozinhas')+'</span></div>'+
     '<input type="text" class="f-title" id="f-title" data-k="title" placeholder="O que precisa ser feito?" maxlength="160" value="'+esc(d.title)+'">'+
+    '<div id="sheetProg"></div>'+
+    '<section class="sec"><h4>Subtarefas <span id="stepCount"></span></h4><ol class="edit-steps" id="stepList"></ol>'+
+    '<div class="addstep"><input type="text" id="f-newstep" placeholder="Escreva uma subtarefa e aperte Enter" maxlength="300"><button class="btn" data-act="add-step">Adicionar</button></div>'+
+    '<p class="hint">Quebre a tarefa em partes pequenas, na ordem de execução. Colar uma lista cria uma subtarefa por linha.</p></section>'+
+    '<details class="det"><summary>Detalhes <span id="detSum"></span></summary><div class="det-in">'+
     '<div class="fields">'+
     '<label class="fld">Situação<select id="f-status" data-k="status">'+STATUS.map(s=>opt(s[0],s[1],d.status)).join('')+'</select></label>'+
     '<label class="fld">Prioridade<select id="f-prio" data-k="prio">'+opt('alta','Alta',d.prio)+opt('media','Média',d.prio)+opt('baixa','Baixa',d.prio)+'</select></label>'+
@@ -461,11 +472,14 @@ function renderSheet(){
     '<label class="fld">Prazo<input type="date" id="f-due" data-k="due" value="'+esc(d.due)+'"></label>'+
     '</div>'+
     '<label class="fld">Observações<textarea id="f-desc" data-k="desc" placeholder="Contexto, links, o que conta como pronto.">'+esc(d.desc)+'</textarea></label>'+
-    '<section class="sec"><h4>Passo a passo <span id="stepCount"></span></h4><ol class="edit-steps" id="stepList"></ol>'+
-    '<div class="addstep"><input type="text" id="f-newstep" placeholder="Escreva um passo e aperte Enter" maxlength="300"><button class="btn" data-act="add-step">Adicionar</button></div>'+
-    '<p class="hint">Passos pequenos, na ordem de execução. Colar uma lista cria um passo por linha.</p></section>'+
-    '<div class="panel-foot" id="foot"></div></aside>';
-  renderSteps(); renderFoot(false);
+    '</div></details>'+
+    '<div class="panel-foot" id="foot"></div></div></aside>';
+  renderSteps(); renderDetSum(); renderFoot(false);
+}
+function renderDetSum(){
+  const d=S.draft, el=$('#detSum'); if(!d||!el) return;
+  const di=d.due?dueInfo({due:d.due,status:d.status}):null;
+  el.textContent=['Prioridade '+PRIO[d.prio].l.toLowerCase(),di?di.label:'Sem prazo',nameOf(d.who)||'Sem responsável',d.scope==='pessoal'?'Pessoal':'Empresa'].join(' · ');
 }
 function renderFoot(confirming){
   let h='';
@@ -476,12 +490,13 @@ function renderFoot(confirming){
 }
 function renderSteps(){
   const st=S.draft.steps;
-  $('#stepList').innerHTML=st.map((s,i)=>'<li><input type="checkbox" data-chk="'+i+'" id="st-c-'+s.id+'" aria-label="Passo feito"'+(s.done?' checked':'')+'>'+
+  $('#stepList').innerHTML=st.map((s,i)=>'<li><input type="checkbox" data-chk="'+i+'" id="st-c-'+s.id+'" aria-label="Subtarefa feita"'+(s.done?' checked':'')+'>'+
     '<input type="text" data-st="'+i+'" id="st-t-'+s.id+'" maxlength="300" value="'+esc(s.text)+'"'+(s.done?' class="sd"':'')+'>'+
-    '<button class="mini" data-act="st-up" data-i="'+i+'" aria-label="Subir passo"'+(i===0?' disabled':'')+'>↑</button>'+
-    '<button class="mini" data-act="st-down" data-i="'+i+'" aria-label="Descer passo"'+(i===st.length-1?' disabled':'')+'>↓</button>'+
-    '<button class="mini" data-act="st-del" data-i="'+i+'" aria-label="Remover passo">✕</button></li>').join('');
-  $('#stepCount').textContent=st.length?st.filter(s=>s.done).length+' de '+st.length+' feitos':'nenhum passo ainda';
+    '<button class="mini" data-act="st-up" data-i="'+i+'" aria-label="Subir subtarefa"'+(i===0?' disabled':'')+'>↑</button>'+
+    '<button class="mini" data-act="st-down" data-i="'+i+'" aria-label="Descer subtarefa"'+(i===st.length-1?' disabled':'')+'>↓</button>'+
+    '<button class="mini" data-act="st-del" data-i="'+i+'" aria-label="Remover subtarefa">✕</button></li>').join('');
+  $('#stepCount').textContent=st.length?st.filter(s=>s.done).length+' de '+st.length+' feitas':'nenhuma ainda';
+  $('#sheetProg').innerHTML=progress(S.draft);
 }
 function draftTask(){
   const d=S.draft, scope=d.scope;
@@ -574,7 +589,7 @@ document.addEventListener('change',e=>{
   if(t.dataset.k&&S.draft&&t.tagName==='SELECT'||t.id==='f-due'){
     if(!S.draft) return;
     S.draft[t.dataset.k]=t.value;
-    touch(true);
+    renderDetSum(); touch(true);
   }
 });
 document.addEventListener('input',e=>{
@@ -587,6 +602,7 @@ document.addEventListener('keydown',e=>{
   if(e.key!=='Enter') return;
   const t=e.target;
   if(t.id==='f-rename'){ e.preventDefault(); saveRename(S.editMember); }
+  else if(t.id==='f-title'){ e.preventDefault(); $('#f-newstep').focus(); }
   else if(t.id==='f-newstep'){ e.preventDefault(); addSteps(t.value); t.value=''; }
   else if(t.dataset&&t.dataset.st!==undefined){ e.preventDefault(); $('#f-newstep').focus(); }
   else if(t.classList&&t.classList.contains('card')) openTask(t.dataset.id);

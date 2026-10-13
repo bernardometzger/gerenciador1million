@@ -35,10 +35,36 @@ Site estático, sem build e sem framework.
 - Só lista, sem quadro kanban. Só dois estados: a fazer e feito.
 - Período: **Tudo**, **Semana** (prazo até domingo, agrupado por dia) e **Hoje** (prazo até hoje, com atrasadas). Tarefas sem prazo só aparecem em Tudo.
 - Na Semana, tarefas mudam de dia arrastando ou pelos botões "← Antes" / "Depois →"; não se move para antes de hoje. "Fazer hoje" troca o prazo para hoje em qualquer visão.
-- No painel de nova tarefa, o botão "Criar tarefa" fica à esquerda.
+- Clicar numa tarefa "entra" nela: página inteira (não painel lateral) com as **subtarefas** em primeiro plano; situação, prioridade, responsável, prazo e observações ficam recolhidos em "Detalhes". Na tela o nome é "subtarefas"; no banco e no código continuam sendo `steps`.
+- Na lista, cada tarefa mostra a próxima subtarefa pendente e uma barra de progresso.
+- Na página da tarefa, os botões do rodapé ("Criar tarefa", "Excluir tarefa", "Pronto") ficam todos à esquerda, lado a lado. Nada clicável no canto inferior direito: o selo da Netlify cobre essa área. Enter no título leva ao campo de subtarefa.
 - Visual: fundo mais escuro e tarefas em blocos claros com borda, para contraste nítido; temas claro e escuro pelos tokens em `:root`.
 
 ## Ainda não feito
 
 - Hospedagem do site (Vercel ou Netlify ligados a este repositório).
-- Tarefas pessoais privadas, vários quadros, e IA para gerar o passo a passo.
+- Tarefas pessoais privadas, vários quadros, e IA para gerar o passo a passo. Tarefas privadas exigem ligar cada pessoa de `members` ao usuário de login (hoje não há ligação); a IA exige uma função no servidor para guardar a chave.
+
+## Pendências anotadas (análise de 13/10/2026)
+
+Segurança:
+
+- **Urgente:** o cadastro está aberto no Supabase (`disable_signup: false`) e o repositório é público. Desligar "Allow new users to sign up" em Authentication > Sign In / Providers antes de hospedar.
+- Ids de tarefa, subtarefa e pessoa entram no HTML sem `esc()`.
+- Sessão expirada mostra "não foi possível carregar" em vez da tela de login.
+
+Defeitos (vistos lendo o código, não reproduzidos):
+
+1. Depois de gravar, a tela volta por um instante à versão antiga até a releitura chegar (`push` apaga `over[id]` antes de `S.remote` ser atualizado).
+2. Falha de gravação descarta a alteração, sem nova tentativa.
+3. Fechar a página de nova tarefa (Voltar ou Esc) descarta tudo sem perguntar.
+4. Excluir uma pessoa deixa tarefas órfãs: as pessoais somem; as da empresa não entram no filtro "Sem responsável".
+5. Duas pessoas editando a mesma tarefa: a última gravação sobrescreve a outra (linha inteira, com os `steps`).
+6. A leitura traz no máximo 1.000 tarefas e as feitas nunca são arquivadas.
+7. Rodar `supabase.sql` de novo dá erro nas duas linhas `alter publication`.
+
+Limpeza:
+
+- Restos do quadro kanban em `index.html`: estilos `.board`/`.col`/`.card`, `cardHtml`, campo `area`, `pp_view`, `fArea`.
+- A tela de equipe ainda diz "Não há senha nesta versão".
+- `passo-a-passo.html` pode sair do repositório.

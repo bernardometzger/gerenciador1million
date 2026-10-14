@@ -34,7 +34,9 @@ Site estático, sem build e sem framework.
 - Por enquanto todos veem as tarefas pessoais de todos (decisão do dono para o início).
 - Só lista, sem quadro kanban. Só dois estados: a fazer e feito.
 - Período: **Tudo**, **Semana** (prazo até domingo, agrupado por dia) e **Hoje** (prazo até hoje, com atrasadas). Tarefas sem prazo só aparecem em Tudo.
-- Na Semana, tarefas mudam de dia arrastando ou pelos botões "← Antes" / "Depois →"; não se move para antes de hoje. "Fazer hoje" troca o prazo para hoje em qualquer visão.
+- Na Semana, tarefas mudam de dia arrastando. "Fazer hoje" troca o prazo para hoje em qualquer visão.
+- "↑ Antes" / "Depois ↓" **não mudam o dia**: trocam a ordem com a tarefa vizinha que tem a mesma prioridade e o mesmo prazo. Só aparecem quando existe essa vizinha. A ordem dentro do grupo vem de `createdAt` (`created_at` no banco), que funciona como campo de ordem: os botões trocam os valores das duas tarefas.
+- Subtarefas têm caixas para ticar (na página da tarefa e na lista, em "Subtarefas ▾"). Ticar todas conclui a tarefa sozinha; desmarcar uma reabre.
 - Clicar numa tarefa "entra" nela: página inteira (não painel lateral) com as **subtarefas** em primeiro plano; situação, prioridade, responsável, prazo e observações ficam recolhidos em "Detalhes". Na tela o nome é "subtarefas"; no banco e no código continuam sendo `steps`.
 - Na lista, cada tarefa mostra a próxima subtarefa pendente e uma barra de progresso.
 - Na página da tarefa, os botões do rodapé ("Criar tarefa", "Excluir tarefa", "Pronto") ficam todos à esquerda, lado a lado. Nada clicável no canto inferior direito: o selo da Netlify cobre essa área. Enter no título leva ao campo de subtarefa.
@@ -55,7 +57,7 @@ Segurança:
 
 Defeitos (vistos lendo o código, não reproduzidos):
 
-1. Depois de gravar, a tela volta por um instante à versão antiga até a releitura chegar (`push` apaga `over[id]` antes de `S.remote` ser atualizado).
+1. ~~Depois de gravar, a tela voltava por um instante à versão antiga~~ — corrigido em 14/10/2026: gravação bem-sucedida atualiza `S.remote`, e leituras que começaram antes de uma gravação terminar são descartadas e refeitas (`wrote`/`again` em `fetchAll`).
 2. Falha de gravação descarta a alteração, sem nova tentativa.
 3. Fechar a página de nova tarefa (Voltar ou Esc) descarta tudo sem perguntar.
 4. Excluir uma pessoa deixa tarefas órfãs: as pessoais somem; as da empresa não entram no filtro "Sem responsável".

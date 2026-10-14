@@ -110,8 +110,12 @@ select,input[type=text],input[type=date],textarea{background:var(--surface);bord
 .steps{margin:0;padding:2px 12px 12px 46px;display:flex;flex-direction:column;gap:6px}
 .steps li{padding-left:2px}
 .steps li::marker{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
-.steps label{display:flex;gap:8px;align-items:flex-start;cursor:pointer;overflow-wrap:anywhere}
-.steps input{margin-top:3px;accent-color:var(--ok);flex:none}
+.steps label{display:flex;gap:10px;align-items:center;cursor:pointer;overflow-wrap:anywhere}
+.steps .cbx{margin-top:0}
+.cbx{appearance:none;-webkit-appearance:none;flex:none;width:22px;height:22px;margin:0;border:2px solid var(--muted);border-radius:6px;background:var(--surface);display:inline-grid;place-content:center;cursor:pointer}
+.cbx::after{content:"";width:6px;height:11px;border:solid var(--surface);border-width:0 2.5px 2.5px 0;transform:translateY(-1px) rotate(45deg);opacity:0}
+.cbx:checked{background:var(--ok);border-color:var(--ok)}
+.cbx:checked::after{opacity:1}
 .steps .sd{text-decoration:line-through;color:var(--muted)}
 
 .empty{background:var(--surface);border:1px dashed var(--line);border-radius:12px;padding:32px 20px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px}
@@ -139,7 +143,6 @@ select,input[type=text],input[type=date],textarea{background:var(--surface);bord
 .edit-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;counter-reset:s}
 .edit-steps li{display:flex;align-items:center;gap:6px;counter-increment:s;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:5px 6px 5px 8px;min-width:0}
 .edit-steps li::before{content:counter(s);width:18px;text-align:right;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none}
-.edit-steps input[type=checkbox]{accent-color:var(--ok);flex:none;width:20px;height:20px}
 .edit-steps input[type=text]{flex:1;border-color:transparent;background:transparent;padding:6px}
 .edit-steps input.sd{text-decoration:line-through;color:var(--muted)}
 .mini{flex:none;border:0;background:transparent;color:var(--muted);width:28px;height:30px;border-radius:6px;padding:0}
@@ -221,7 +224,12 @@ function push(id){
   if(!(id in pending)){ delete over[id]; merge(); render(); return; }
   const body=pending[id]; delete pending[id]; inflight[id]=true;
   const q=body===null?db.from('tasks').delete().eq('id',id):db.from('tasks').upsert(toRow(Object.assign({id},body)));
-  Promise.resolve(q).then(r=>{ if(r&&r.error) onWriteErr(r.error); },onWriteErr).then(()=>{ inflight[id]=false; push(id); });
+  // Ao gravar com sucesso, a cópia do banco (S.remote) já recebe a mudança; sem isso a tela
+  // voltava ao estado antigo por um instante, até a releitura chegar.
+  const ok=()=>{ wrote++; const i=S.remote.findIndex(x=>x.id===id);
+    if(body===null){ if(i>=0) S.remote.splice(i,1); }
+    else{ const t=Object.assign({id},body); if(i>=0) S.remote[i]=t; else S.remote.push(t); } };
+  Promise.resolve(q).then(r=>{ if(r&&r.error) onWriteErr(r.error); else ok(); },onWriteErr).then(()=>{ inflight[id]=false; push(id); });
 }
 function writeTask(t){
   if(!db){
@@ -263,16 +271,22 @@ async function boot(){
   try{ session=(await db.auth.getSession()).data.session; }catch(e){}
   if(session) start(); else showLogin('');
 }
-let refetchTimer=null, fetching=false;
+let refetchTimer=null, fetching=false, again=false, wrote=0;
+// Uma leitura que começou antes de uma gravação terminar traria dados velhos: é descartada e refeita.
+// Pedidos de leitura que chegam durante outra leitura também geram uma nova no final.
 async function fetchAll(){
-  if(fetching) return; fetching=true;
+  if(fetching){ again=true; return; }
+  fetching=true; again=false; const w=wrote;
   try{
     const [a,b]=await Promise.all([db.from('tasks').select('*'),db.from('members').select('*').order('created_at')]);
     if(a.error||b.error) throw (a.error||b.error);
-    S.remote=a.data.map(fromRow); S.team=b.data.map(m=>({id:m.id,name:m.name}));
-    S.ready=S.teamReady=true; merge(); render();
+    if(w===wrote){
+      S.remote=a.data.map(fromRow); S.team=b.data.map(m=>({id:m.id,name:m.name}));
+      S.ready=S.teamReady=true; merge(); render();
+    }else again=true;
   }catch(e){ toast('Não foi possível carregar as tarefas. Confira a internet e recarregue a página.'); }
   fetching=false;
+  if(again) fetchAll();
 }
 function start(){
   S.needLogin=false; $('#login').hidden=true; $('#login').innerHTML=''; render();
@@ -343,19 +357,20 @@ function cardHtml(t){
     '<h3>'+esc(t.title)+'</h3>'+
     (nx?'<p class="next"><b>Próximo passo:</b> '+esc(nx.text)+'</p>':'')+progress(t)+chips(t)+'</article>';
 }
+let NB={};
 function rowHtml(t){
   const open=S.expanded.has(t.id), done=t.status==='feito', nx=done?null:t.steps.find(s=>!s.done);
-  const wk=S.period==='semana'&&!done, td=ymd(new Date());
+  const wk=S.period==='semana'&&!done, td=ymd(new Date()), nb=NB[t.id]||{};
   let h='<li class="row'+(done?' done':'')+'"'+(wk?' draggable="true" data-drag="'+t.id+'"':'')+'><div class="row-top">'+
     '<button class="tick" data-act="toggle-done" data-id="'+t.id+'" aria-label="'+(done?'Reabrir tarefa':'Concluir tarefa')+'">'+(done?'✓':'')+'</button>'+
     '<button class="row-main" data-act="open" data-id="'+t.id+'" title="Abrir a tarefa e ver as subtarefas"><span class="row-title">'+esc(t.title)+'</span>'+
     (nx&&!open?'<span class="next"><b>Próxima:</b> '+esc(nx.text)+'</span>':'')+chips(t)+progress(t)+'</button>'+
-    (wk&&t.due>td?'<button class="exp" data-act="shift" data-d="-1" data-id="'+t.id+'" aria-label="Adiantar um dia" title="Adiantar um dia">← Antes</button>':'')+
-    (wk?'<button class="exp" data-act="shift" data-d="1" data-id="'+t.id+'" aria-label="Adiar um dia" title="Adiar um dia">Depois →</button>':'')+
+    (nb.up?'<button class="exp" data-act="move" data-id="'+t.id+'" data-to="'+nb.up+'" title="Fazer antes da tarefa de cima (mesmo dia e prioridade)">↑ Antes</button>':'')+
+    (nb.down?'<button class="exp" data-act="move" data-id="'+t.id+'" data-to="'+nb.down+'" title="Fazer depois da tarefa de baixo (mesmo dia e prioridade)">Depois ↓</button>':'')+
     (!done&&t.due!==td?'<button class="exp today-btn" data-act="today" data-id="'+t.id+'" title="Mudar o prazo para hoje">Fazer hoje</button>':'')+
     (t.steps.length?'<button class="exp" data-act="expand" data-id="'+t.id+'" aria-expanded="'+open+'">Subtarefas '+(open?'▴':'▾')+'</button>':'')+'</div>';
   if(open&&t.steps.length){
-    h+='<ol class="steps">'+t.steps.map(s=>'<li><label><input type="checkbox" data-step="'+s.id+'" data-id="'+t.id+'"'+(s.done?' checked':'')+'><span'+(s.done?' class="sd"':'')+'>'+esc(s.text)+'</span></label></li>').join('')+'</ol>';
+    h+='<ol class="steps">'+t.steps.map(s=>'<li><label><input type="checkbox" class="cbx" data-step="'+s.id+'" data-id="'+t.id+'"'+(s.done?' checked':'')+'><span'+(s.done?' class="sd"':'')+'>'+esc(s.text)+'</span></label></li>').join('')+'</ol>';
   }
   return h+'</li>';
 }
@@ -395,6 +410,9 @@ function render(){
       (filtered?'':'<button class="btn primary" data-act="new">Criar a primeira tarefa</button>')+'</div>';
   }else{
     const open=ts.filter(t=>t.status!=='feito'), done=ts.filter(t=>t.status==='feito');
+    // Vizinhas para "Antes"/"Depois": só tarefas abertas com a mesma prioridade e o mesmo prazo.
+    NB={}; open.forEach((t,i)=>{ const same=x=>x&&x.prio===t.prio&&(x.due||'')===(t.due||'');
+      NB[t.id]={up:same(open[i-1])?open[i-1].id:'',down:same(open[i+1])?open[i+1].id:''}; });
     if(S.period==='semana'){
       const grp=(title,items,hint,day)=>'<section class="day"'+(day?' data-day="'+day+'"':'')+'><h2 class="group">'+title+(items.length?' ('+items.length+')':'')+'</h2>'+
         (items.length?'<ul class="list">'+items.map(rowHtml).join('')+'</ul>':'<p class="hint">'+hint+'</p>')+'</section>';
@@ -490,7 +508,7 @@ function renderFoot(confirming){
 }
 function renderSteps(){
   const st=S.draft.steps;
-  $('#stepList').innerHTML=st.map((s,i)=>'<li><input type="checkbox" data-chk="'+i+'" id="st-c-'+s.id+'" aria-label="Subtarefa feita"'+(s.done?' checked':'')+'>'+
+  $('#stepList').innerHTML=st.map((s,i)=>'<li><input type="checkbox" class="cbx" data-chk="'+i+'" id="st-c-'+s.id+'" aria-label="Subtarefa feita"'+(s.done?' checked':'')+'>'+
     '<input type="text" data-st="'+i+'" id="st-t-'+s.id+'" maxlength="300" value="'+esc(s.text)+'"'+(s.done?' class="sd"':'')+'>'+
     '<button class="mini" data-act="st-up" data-i="'+i+'" aria-label="Subir subtarefa"'+(i===0?' disabled':'')+'>↑</button>'+
     '<button class="mini" data-act="st-down" data-i="'+i+'" aria-label="Descer subtarefa"'+(i===st.length-1?' disabled':'')+'>↓</button>'+
@@ -527,19 +545,24 @@ function addSteps(text){
 }
 
 /* ---------- eventos ---------- */
+// Ao ticar subtarefas: todas feitas conclui a tarefa; desmarcar uma reabre a tarefa.
+function autoDone(t){
+  if(!t.steps.length) return;
+  const all=t.steps.every(s=>s.done);
+  if(all&&t.status!=='feito'){ t.status='feito'; toast('Todas as subtarefas feitas: tarefa concluída.'); }
+  else if(!all&&t.status==='feito') t.status='afazer';
+}
 function toast(msg){ const el=$('#toast'); el.textContent=msg; el.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>{el.hidden=true;},4500); }
 document.addEventListener('click',e=>{
   const b=e.target.closest('[data-act]'); if(!b) return;
   const a=b.dataset.act, id=b.dataset.id, d=S.draft;
   if(a==='tab'){ S.tab=b.dataset.v; ls.set('pp_tab',S.tab); render(); }
   else if(a==='period'){ S.period=b.dataset.v; ls.set('pp_period',S.period); render(); }
-  else if(a==='shift'){
-    const t=byId(id); if(!t) return;
-    const td=ymd(new Date()), base=t.due&&t.due>td?t.due:td, nd=addDays(base,+b.dataset.d);
-    if(nd<td) return;
-    writeTask(Object.assign(clone(t),{due:nd}));
-    const p=nd.split('-').map(Number);
-    toast('Movida para '+DIAS[new Date(p[0],p[1]-1,p[2]).getDay()].toLowerCase()+', '+p[2]+' '+MES[p[1]-1]+'.');
+  else if(a==='move'){
+    // A ordem dentro do mesmo dia e prioridade vem de createdAt: trocar os valores troca as posições.
+    const t=byId(id), o=byId(b.dataset.to); if(!t||!o) return;
+    if(t.createdAt===o.createdAt){ writeTask(Object.assign(clone(t),{createdAt:o.createdAt+((NB[id]||{}).up===o.id?-1:1)})); return; }
+    const x=t.createdAt; writeTask(Object.assign(clone(t),{createdAt:o.createdAt})); writeTask(Object.assign(clone(o),{createdAt:x}));
   }
   else if(a==='today'){ const t=byId(id); if(t) writeTask(Object.assign(clone(t),{due:ymd(new Date())})); }
   else if(a==='team'){ S.teamOpen=true; render(); }
@@ -580,10 +603,11 @@ document.addEventListener('change',e=>{
     const task=byId(t.dataset.id); if(!task) return;
     const n=clone(task), s=n.steps.find(s=>s.id===t.dataset.step); if(!s) return;
     s.done=t.checked;
-    writeTask(n); return;
+    autoDone(n); writeTask(n); return;
   }
   if(t.dataset.chk!==undefined&&S.draft){
     const s=S.draft.steps[+t.dataset.chk]; s.done=t.checked;
+    autoDone(S.draft); $('#f-status').value=S.draft.status; renderDetSum();
     renderSteps(); touch(true); return;
   }
   if(t.dataset.k&&S.draft&&t.tagName==='SELECT'||t.id==='f-due'){

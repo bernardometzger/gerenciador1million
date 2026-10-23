@@ -167,7 +167,33 @@ select,input[type=text],input[type=date],textarea{background:var(--surface);bord
 .dialog form input{flex:1}
 .toast{position:fixed;z-index:20;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:9px;max-width:calc(100% - 32px);font-size:14px}
 
+.month{align-items:center}
+.month button{font-size:17px;line-height:1;padding:5px 11px}
+.month span{padding:0 8px;font-weight:600;white-space:nowrap}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.tile span,.tile small{font-size:13px;color:var(--muted)}
+.tile b{font-family:var(--display);font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.pos{color:var(--ok)}
+.neg{color:var(--hi)}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:4px 14px 14px;display:flex;flex-direction:column;gap:10px}
+.cat{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;font-size:14px}
+.cat>span:first-child{overflow-wrap:anywhere}
+.cbar{grid-column:1/-1;height:6px;background:var(--sunken);border-radius:3px;overflow:hidden}
+.cbar i{display:block;height:100%;background:var(--hi);border-radius:3px}
+.money{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap;align-self:center}
+.fin-list{display:flex;flex-direction:column;gap:6px}
+.btn.sm{padding:5px 12px;font-size:13px}
+.tpl-pick{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.tpl-pick button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-weight:500}
+.tpl-pick button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.pick .hint{font-weight:400}
+.dialog form.fin-form{flex-direction:column;gap:12px}
+.fin-form .seg{align-self:flex-start}
+.fin-form .panel-foot{padding-top:4px}
 @media (max-width:760px){
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .tile b{font-size:18px}
   .board{grid-template-columns:minmax(0,1fr)}
   .stats{margin-left:0;width:100%}
   .fields{grid-template-columns:minmax(0,1fr)}
@@ -179,6 +205,8 @@ select,input[type=text],input[type=date],textarea{background:var(--surface);bord
 <header class="bar" id="bar"></header>
 <main id="app"></main>
 <div id="sheet" hidden></div>
+<div id="fin" hidden></div>
+<div id="tplDlg" hidden></div>
 <div id="team" hidden></div>
 <div id="login" hidden></div>
 <div id="toast" class="toast" role="status" hidden></div>
@@ -196,8 +224,10 @@ const STATUS=[['afazer','A fazer'],['feito','Feito']];
 const MES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const ls={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
 
+function ymdNow(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 const S={remote:[],tasks:[],team:[],me:ls.get('pp_me')||'',tab:ls.get('pp_tab')||'empresa',view:ls.get('pp_view')||'quadro',
-  period:['semana','hoje'].indexOf(ls.get('pp_period'))>=0?ls.get('pp_period'):'tudo',person:'',fPrio:'',fWho:'',fArea:'',expanded:new Set(),ready:false,teamReady:false,local:false,canWrite:true,draft:null,isNew:false,teamOpen:false};
+  period:['semana','hoje'].indexOf(ls.get('pp_period'))>=0?ls.get('pp_period'):'tudo',person:'',fPrio:'',fWho:'',fArea:'',expanded:new Set(),ready:false,teamReady:false,local:false,canWrite:true,draft:null,isNew:false,teamOpen:false,
+  section:ls.get("pp_section")==="financas"?"financas":"tarefas",fin:[],finErr:false,month:ymdNow().slice(0,7),fKind:"",fCat:"",entry:null,tpl:[],tplErr:false,tplMode:false,tplOpen:false,tplDel:""};
 let db=null;
 const over={},pending={},inflight={};
 
@@ -264,6 +294,8 @@ async function boot(){
   if(!cfg.url||!cfg.key||/COLE_AQUI/.test(cfg.url+cfg.key)||!window.supabase){
     S.local=true;
     try{ S.remote=(JSON.parse(ls.get('pp_tasks')||'[]')).map(norm); S.team=JSON.parse(ls.get('pp_team')||'[]'); }catch(e){ S.remote=[]; S.team=[]; }
+    try{ S.fin=(JSON.parse(ls.get('pp_fin')||'[]')).map(finNorm); }catch(e){ S.fin=[]; }
+    try{ S.tpl=(JSON.parse(ls.get('pp_tpl')||'[]')).map(tplFrom); }catch(e){ S.tpl=[]; }
     S.ready=S.teamReady=true; merge(); render(); return;
   }
   db=window.supabase.createClient(cfg.url,cfg.key);
@@ -272,16 +304,22 @@ async function boot(){
   if(session) start(); else showLogin('');
 }
 let refetchTimer=null, fetching=false, again=false, wrote=0;
+const refetchSoon=()=>{ clearTimeout(refetchTimer); refetchTimer=setTimeout(fetchAll,250); };
 // Uma leitura que começou antes de uma gravação terminar traria dados velhos: é descartada e refeita.
 // Pedidos de leitura que chegam durante outra leitura também geram uma nova no final.
 async function fetchAll(){
   if(fetching){ again=true; return; }
   fetching=true; again=false; const w=wrote;
   try{
-    const [a,b]=await Promise.all([db.from('tasks').select('*'),db.from('members').select('*').order('created_at')]);
+    // Finanças e modelos vêm à parte: se a tabela ainda não existir no banco, as tarefas continuam funcionando.
+    const soft=q=>Promise.resolve(q).catch(e=>({error:e}));
+    const [a,b,c,m]=await Promise.all([db.from('tasks').select('*'),db.from('members').select('*').order('created_at'),
+      soft(db.from('finance').select('*')),soft(db.from('templates').select('*'))]);
     if(a.error||b.error) throw (a.error||b.error);
-    if(w===wrote){
+    if(w===wrote&&!busyW){
       S.remote=a.data.map(fromRow); S.team=b.data.map(m=>({id:m.id,name:m.name}));
+      S.finErr=!!c.error; if(!c.error) S.fin=c.data.map(finFrom);
+      S.tplErr=!!m.error; if(!m.error) S.tpl=m.data.map(tplFrom);
       S.ready=S.teamReady=true; merge(); render();
     }else again=true;
   }catch(e){ toast('Não foi possível carregar as tarefas. Confira a internet e recarregue a página.'); }
@@ -290,10 +328,12 @@ async function fetchAll(){
 }
 function start(){
   S.needLogin=false; $('#login').hidden=true; $('#login').innerHTML=''; render();
-  const soon=()=>{ clearTimeout(refetchTimer); refetchTimer=setTimeout(fetchAll,250); };
+  const soon=refetchSoon;
   fetchAll();
   db.channel('pp').on('postgres_changes',{event:'*',schema:'public',table:'tasks'},soon)
-    .on('postgres_changes',{event:'*',schema:'public',table:'members'},soon).subscribe();
+    .on('postgres_changes',{event:'*',schema:'public',table:'members'},soon)
+    .on('postgres_changes',{event:'*',schema:'public',table:'finance'},soon)
+    .on('postgres_changes',{event:'*',schema:'public',table:'templates'},soon).subscribe();
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden) soon(); });
   window.addEventListener('online',soon);
 }
@@ -377,18 +417,23 @@ function rowHtml(t){
 function opt(v,l,cur){return '<option value="'+esc(v)+'"'+(v===cur?' selected':'')+'>'+esc(l)+'</option>';}
 function renderBar(){
   const seg=(act,cur,items)=>'<div class="seg">'+items.map(i=>'<button data-act="'+act+'" data-v="'+i[0]+'" aria-pressed="'+(cur===i[0])+'">'+i[1]+'</button>').join('')+'</div>';
+  const fin=S.section==='financas';
   $('#bar').innerHTML='<div class="brand">Passo <i>a</i> Passo</div>'+
-    seg('tab',S.tab,[['empresa','Empresa'],['pessoal','Pessoal']])+
-    seg('period',S.period,[['tudo','Tudo'],['semana','Semana'],['hoje','Hoje']])+
+    seg('section',S.section,[['tarefas','Tarefas'],['financas','Finanças']])+
+    (fin
+      ?'<div class="seg month"><button data-act="month" data-d="-1" aria-label="Mês anterior">‹</button><span>'+monthLabel(S.month)+'</span><button data-act="month" data-d="1" aria-label="Próximo mês">›</button></div>'
+      :seg('tab',S.tab,[['empresa','Empresa'],['pessoal','Pessoal']])+
+       seg('period',S.period,[['tudo','Tudo'],['semana','Semana'],['hoje','Hoje']]))+
     '<div class="grow"></div>'+
     '<button class="me" data-act="team" title="Trocar de pessoa ou adicionar alguém">'+esc(nameOf(S.me)||'Quem é você?')+'</button>'+
-    '<button class="btn primary" data-act="new">Nova tarefa</button>';
+    (fin?'<button class="btn primary" data-act="fin-new">Novo lançamento</button>':'<button class="btn primary" data-act="new">Nova tarefa</button>');
 }
 function render(){
   renderBar();
   const app=$('#app');
   if(S.needLogin){ app.innerHTML=''; return; }
-  if(!S.ready||!S.teamReady){ app.innerHTML='<p class="hint">Carregando tarefas…</p>'; return; }
+  if(!S.ready||!S.teamReady){ app.innerHTML='<p class="hint">Carregando…</p>'; return; }
+  if(S.section==='financas'){ renderFin(); askWho(); return; }
   const td=ymd(new Date()), sun=weekEnd(), mon=addDays(sun,-6);
   let ts=visible();
   if(S.period==='hoje') ts=ts.filter(t=>t.status==='feito'?t.due===td:t.due&&t.due<=td);
@@ -400,6 +445,7 @@ function render(){
   if(S.tab==='empresa') h+='<label>Responsável <select id="flt-who" data-f="fWho">'+opt('','Todos',S.fWho)+people+opt('_none','Sem responsável',S.fWho)+'</select></label>';
   else h+='<label>Tarefas de <select id="flt-person" data-f="person">'+people+'</select></label>';
   h+='<label>Prioridade <select id="flt-prio" data-f="fPrio">'+opt('','Todas',S.fPrio)+opt('alta','Alta',S.fPrio)+opt('media','Média',S.fPrio)+opt('baixa','Baixa',S.fPrio)+'</select></label>';
+  h+='<button class="btn ghost sm" data-act="tpl-open" title="Moldes de tarefas que se repetem">Modelos'+(taskTpls().length?' ('+taskTpls().length+')':'')+'</button>';
   const c=k=>ts.filter(t=>t.status===k).length, late=ts.filter(isLate).length;
   h+='<div class="stats"><span><b>'+c('afazer')+'</b> a fazer</span><span><b>'+c('feito')+'</b> feitas</span>'+
     (late?'<span class="late"><b>'+late+'</b> atrasada'+(late>1?'s':'')+'</span>':'')+'</div></div>';
@@ -426,8 +472,12 @@ function render(){
     if(done.length) h+='<h2 class="group">Concluídas ('+done.length+')</h2><ul class="list">'+done.map(rowHtml).join('')+'</ul>';
   }
   app.innerHTML=h;
+  askWho();
+}
+function askWho(){
   const need=!S.me||!S.team.some(m=>m.id===S.me);
   if(need||S.teamOpen) renderTeam(need); else $('#team').hidden=true;
+  if(S.tplOpen&&!need) renderTplDlg(); else{ $('#tplDlg').hidden=true; $('#tplDlg').innerHTML=''; }
 }
 
 /* ---------- equipe (sem senha: cada um escolhe o próprio nome) ---------- */
@@ -475,19 +525,21 @@ function openTask(id,status){
 function renderSheet(){
   const d=S.draft, el=$('#sheet'); el.hidden=false;
   el.innerHTML='<aside class="panel" role="dialog" aria-modal="true" aria-label="Tarefa"><div class="panel-in">'+
-    '<div class="panel-head"><button class="btn ghost" data-act="close-sheet">← Voltar</button><span class="save" id="saveState">'+(S.isNew?'Nova tarefa':'As alterações são salvas sozinhas')+'</span></div>'+
-    '<input type="text" class="f-title" id="f-title" data-k="title" placeholder="O que precisa ser feito?" maxlength="160" value="'+esc(d.title)+'">'+
+    '<div class="panel-head"><button class="btn ghost" data-act="close-sheet">← Voltar</button><span class="save" id="saveState">'+(S.isNew?'Nova tarefa':S.tplMode?'Modelo · as alterações são salvas sozinhas':'As alterações são salvas sozinhas')+'</span></div>'+
+    (S.isNew&&taskTpls().length?'<div class="tpl-pick"><span class="hint">Usar modelo:</span>'+taskTpls().map(m=>'<button data-act="use-tpl" data-id="'+m.id+'" aria-pressed="'+(d.fromTpl===m.id)+'">'+esc(m.name)+'</button>').join('')+'</div>':'')+
+    (S.tplMode?'<p class="notice">Editando um modelo. Estas subtarefas entram em toda tarefa nova criada com ele; tarefas já criadas não mudam.</p>':'')+
+    '<input type="text" class="f-title" id="f-title" data-k="title" placeholder="'+(S.tplMode?'Nome do modelo, ex.: Criativo':'O que precisa ser feito?')+'" maxlength="160" value="'+esc(d.title)+'">'+
     '<div id="sheetProg"></div>'+
     '<section class="sec"><h4>Subtarefas <span id="stepCount"></span></h4><ol class="edit-steps" id="stepList"></ol>'+
     '<div class="addstep"><input type="text" id="f-newstep" placeholder="Escreva uma subtarefa e aperte Enter" maxlength="300"><button class="btn" data-act="add-step">Adicionar</button></div>'+
     '<p class="hint">Quebre a tarefa em partes pequenas, na ordem de execução. Colar uma lista cria uma subtarefa por linha.</p></section>'+
     '<details class="det"><summary>Detalhes <span id="detSum"></span></summary><div class="det-in">'+
     '<div class="fields">'+
-    '<label class="fld">Situação<select id="f-status" data-k="status">'+STATUS.map(s=>opt(s[0],s[1],d.status)).join('')+'</select></label>'+
+    (S.tplMode?'':'<label class="fld">Situação<select id="f-status" data-k="status">'+STATUS.map(s=>opt(s[0],s[1],d.status)).join('')+'</select></label>')+
     '<label class="fld">Prioridade<select id="f-prio" data-k="prio">'+opt('alta','Alta',d.prio)+opt('media','Média',d.prio)+opt('baixa','Baixa',d.prio)+'</select></label>'+
-    '<label class="fld">Onde aparece<select id="f-scope" data-k="scope">'+opt('equipe','Empresa',d.scope)+opt('pessoal','Pessoal',d.scope)+'</select></label>'+
+    (S.tplMode?'':'<label class="fld">Onde aparece<select id="f-scope" data-k="scope">'+opt('equipe','Empresa',d.scope)+opt('pessoal','Pessoal',d.scope)+'</select></label>')+
     '<label class="fld">Responsável<select id="f-who" data-k="who">'+opt('','Sem responsável',d.who)+S.team.map(m=>opt(m.id,m.name,d.who)).join('')+'</select></label>'+
-    '<label class="fld">Prazo<input type="date" id="f-due" data-k="due" value="'+esc(d.due)+'"></label>'+
+    (S.tplMode?'':'<label class="fld">Prazo<input type="date" id="f-due" data-k="due" value="'+esc(d.due)+'"></label>')+
     '</div>'+
     '<label class="fld">Observações<textarea id="f-desc" data-k="desc" placeholder="Contexto, links, o que conta como pronto.">'+esc(d.desc)+'</textarea></label>'+
     '</div></details>'+
@@ -497,24 +549,27 @@ function renderSheet(){
 function renderDetSum(){
   const d=S.draft, el=$('#detSum'); if(!d||!el) return;
   const di=d.due?dueInfo({due:d.due,status:d.status}):null;
+  if(S.tplMode){ el.textContent=['Prioridade '+PRIO[d.prio].l.toLowerCase(),nameOf(d.who)||'Sem responsável'].join(' · '); return; }
   el.textContent=['Prioridade '+PRIO[d.prio].l.toLowerCase(),di?di.label:'Sem prazo',nameOf(d.who)||'Sem responsável',d.scope==='pessoal'?'Pessoal':'Empresa'].join(' · ');
 }
 function renderFoot(confirming){
   let h='';
-  if(S.isNew) h='<button class="btn primary" data-act="create">Criar tarefa</button>';
+  if(S.tplMode) h=confirming?'<span class="hint">Excluir este modelo? Tarefas já criadas com ele continuam.</span><span><button class="btn ghost" data-act="del-cancel">Cancelar</button> <button class="btn danger" data-act="del-yes">Excluir</button></span>'
+    :'<button class="btn danger" data-act="del-ask">Excluir modelo</button><button class="btn primary" data-act="close-sheet">Pronto</button>';
+  else if(S.isNew) h='<button class="btn primary" data-act="create">Criar tarefa</button>';
   else if(confirming) h='<span class="hint">Excluir esta tarefa para todos?</span><span><button class="btn ghost" data-act="del-cancel">Cancelar</button> <button class="btn danger" data-act="del-yes">Excluir</button></span>';
-  else h='<button class="btn danger" data-act="del-ask">Excluir tarefa</button><button class="btn primary" data-act="close-sheet">Pronto</button>';
+  else h='<button class="btn danger" data-act="del-ask">Excluir tarefa</button><button class="btn primary" data-act="close-sheet">Pronto</button><button class="btn" data-act="to-tpl" title="Guardar título, subtarefas, prioridade e responsável como molde para novas tarefas">Salvar como modelo</button>';
   $('#foot').innerHTML=h;
 }
 function renderSteps(){
   const st=S.draft.steps;
-  $('#stepList').innerHTML=st.map((s,i)=>'<li><input type="checkbox" class="cbx" data-chk="'+i+'" id="st-c-'+s.id+'" aria-label="Subtarefa feita"'+(s.done?' checked':'')+'>'+
+  $('#stepList').innerHTML=st.map((s,i)=>'<li>'+(S.tplMode?'':'<input type="checkbox" class="cbx" data-chk="'+i+'" id="st-c-'+s.id+'" aria-label="Subtarefa feita"'+(s.done?' checked':'')+'>')+
     '<input type="text" data-st="'+i+'" id="st-t-'+s.id+'" maxlength="300" value="'+esc(s.text)+'"'+(s.done?' class="sd"':'')+'>'+
     '<button class="mini" data-act="st-up" data-i="'+i+'" aria-label="Subir subtarefa"'+(i===0?' disabled':'')+'>↑</button>'+
     '<button class="mini" data-act="st-down" data-i="'+i+'" aria-label="Descer subtarefa"'+(i===st.length-1?' disabled':'')+'>↓</button>'+
     '<button class="mini" data-act="st-del" data-i="'+i+'" aria-label="Remover subtarefa">✕</button></li>').join('');
-  $('#stepCount').textContent=st.length?st.filter(s=>s.done).length+' de '+st.length+' feitas':'nenhuma ainda';
-  $('#sheetProg').innerHTML=progress(S.draft);
+  $('#stepCount').textContent=S.tplMode?(st.length?st.length+' no modelo':'nenhuma ainda'):st.length?st.filter(s=>s.done).length+' de '+st.length+' feitas':'nenhuma ainda';
+  $('#sheetProg').innerHTML=S.tplMode?'':progress(S.draft);
 }
 function draftTask(){
   const d=S.draft, scope=d.scope;
@@ -526,8 +581,8 @@ let saveTimer=null;
 function commit(){
   clearTimeout(saveTimer); saveTimer=null;
   if(!S.draft||S.isNew) return;
-  const t=draftTask(); if(!t.title) return;
-  writeTask(t);
+  if(S.tplMode){ const m=draftTpl(); if(!m.name) return; saveTpl(m); }
+  else{ const t=draftTask(); if(!t.title) return; writeTask(t); }
   const el=$('#saveState'); if(el) el.textContent='Salvo';
 }
 function touch(now){
@@ -536,12 +591,213 @@ function touch(now){
   clearTimeout(saveTimer);
   if(now) commit(); else saveTimer=setTimeout(commit,600);
 }
-function closeSheet(){ if(saveTimer) commit(); S.draft=null; $('#sheet').hidden=true; $('#sheet').innerHTML=''; }
+function closeSheet(){ if(saveTimer) commit(); S.draft=null; S.tplMode=false; $('#sheet').hidden=true; $('#sheet').innerHTML=''; }
 function addSteps(text){
   const lines=String(text).split(/\r?\n/).map(l=>l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/,'').trim()).filter(Boolean);
   if(!lines.length) return;
   lines.forEach(l=>S.draft.steps.push({id:uid('s'),text:l.slice(0,300),done:false}));
   renderSteps(); touch(true);
+}
+
+/* ---------- finanças ---------- */
+// Lançamentos de despesas e receitas da empresa (tabela finance). Valores guardados em centavos.
+const CATS={despesa:['Anúncios Meta','Anúncios Google','Anúncios outros','Ferramentas e assinaturas','Equipe e freelancers','Produção de conteúdo','Impostos e taxas','Outros'],
+  receita:['Vendas','Serviços','Outros']};
+const MESES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+const BRL=new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
+const money=c=>BRL.format(c/100);
+const centsTxt=c=>(c/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const isAd=e=>e.kind==='despesa'&&/^an[uú]ncio/i.test(e.cat);
+function parseMoney(s){
+  s=String(s||'').replace(/R\$|\s/g,''); if(!s) return NaN;
+  if(s.indexOf(',')>=0) s=s.replace(/\./g,'').replace(',','.');
+  else if(/^\d{1,3}(\.\d{3})+$/.test(s)) s=s.replace(/\./g,'');
+  const v=Number(s); return isFinite(v)?Math.round(v*100):NaN;
+}
+function monthLabel(m){ const p=m.split('-').map(Number); return MESES[p[1]-1].replace(/^./,c=>c.toUpperCase())+' de '+p[0]; }
+function addMonths(m,n){ const p=m.split('-').map(Number), d=new Date(p[0],p[1]-1+n,1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function finNorm(e){
+  return {id:e.id,kind:e.kind==='receita'?'receita':'despesa',cents:Math.round(Number(e.cents)||0),date:e.date||ymd(new Date()),desc:e.desc||'',
+    cat:e.cat||'Outros',who:e.who||'',notes:e.notes||'',createdAt:e.createdAt||0,createdBy:e.createdBy||''};
+}
+const finRow=e=>({id:e.id,kind:e.kind,amount_cents:e.cents,date:e.date,descr:e.desc,category:e.cat,who:e.who,notes:e.notes,created_at:e.createdAt,created_by:e.createdBy});
+const finFrom=r=>finNorm({id:r.id,kind:r.kind,cents:Number(r.amount_cents),date:r.date,desc:r.descr,cat:r.category,who:r.who,notes:r.notes,createdAt:Number(r.created_at)||0,createdBy:r.created_by});
+
+// Gravação otimista simples: a tela muda na hora; se o banco recusar, avisa e relê tudo.
+// Usada por finanças e modelos. Enquanto houver gravação em andamento (busyW), fetchAll não aplica leituras, para não trazer dados velhos.
+let busyW=0;
+function quickWrite(q){
+  busyW++;
+  Promise.resolve(q).then(r=>{ if(r&&r.error) throw r.error; }).catch(err=>{ onWriteErr(err); refetchSoon(); })
+    .then(()=>{ busyW--; wrote++; });
+}
+function saveEntry(e){
+  const i=S.fin.findIndex(x=>x.id===e.id); if(i>=0) S.fin[i]=e; else S.fin.push(e);
+  if(!db){ ls.set('pp_fin',JSON.stringify(S.fin)); render(); return; }
+  render(); quickWrite(db.from('finance').upsert(finRow(e)));
+}
+function deleteEntry(id){
+  S.fin=S.fin.filter(x=>x.id!==id);
+  if(!db){ ls.set('pp_fin',JSON.stringify(S.fin)); render(); return; }
+  render(); quickWrite(db.from('finance').delete().eq('id',id));
+}
+
+function renderFin(){
+  const app=$('#app');
+  if(S.finErr){ app.innerHTML='<p class="notice">A parte de finanças ainda não foi ativada no banco de dados. É preciso rodar o trecho de finanças do arquivo supabase.sql no Supabase (SQL Editor).</p>'; return; }
+  const all=S.fin.filter(e=>e.date.slice(0,7)===S.month);
+  const sum=l=>l.reduce((a,e)=>a+e.cents,0);
+  const inc=sum(all.filter(e=>e.kind==='receita')), exp=sum(all.filter(e=>e.kind==='despesa')), ads=sum(all.filter(isAd)), bal=inc-exp;
+  let h='';
+  if(S.local) h+='<p class="notice">Modo local: o banco de dados ainda não foi configurado (config.js), então os lançamentos ficam só neste navegador.</p>';
+  h+='<div class="tiles">'+
+    '<div class="tile"><span>Receitas</span><b class="pos">'+money(inc)+'</b></div>'+
+    '<div class="tile"><span>Despesas</span><b class="neg">'+money(exp)+'</b></div>'+
+    '<div class="tile"><span>Saldo do mês</span><b class="'+(bal<0?'neg':'pos')+'">'+money(bal)+'</b></div>'+
+    '<div class="tile"><span>Anúncios</span><b>'+money(ads)+'</b><small>'+(exp?Math.round(ads/exp*100)+'% das despesas':'—')+'</small></div></div>';
+  const cats=[...new Set(all.map(e=>e.cat))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  if(S.fCat&&cats.indexOf(S.fCat)<0) cats.push(S.fCat);
+  h+='<div class="tools"><label>Tipo <select data-f="fKind">'+opt('','Todos',S.fKind)+opt('despesa','Despesas',S.fKind)+opt('receita','Receitas',S.fKind)+'</select></label>'+
+    '<label>Categoria <select data-f="fCat">'+opt('','Todas',S.fCat)+cats.map(c=>opt(c,c,S.fCat)).join('')+'</select></label></div>';
+  if(exp){
+    const by={}; all.filter(e=>e.kind==='despesa').forEach(e=>{ by[e.cat]=(by[e.cat]||0)+e.cents; });
+    const rows=Object.keys(by).sort((a,b)=>by[b]-by[a]), max=by[rows[0]];
+    h+='<section class="box"><h2 class="group">Despesas por categoria</h2>'+rows.map(c=>'<div class="cat"><span>'+esc(c)+'</span><span class="money">'+money(by[c])+' · '+Math.round(by[c]/exp*100)+'%</span>'+
+      '<div class="cbar"><i style="width:'+Math.max(2,Math.round(by[c]/max*100))+'%"></i></div></div>').join('')+'</section>';
+  }
+  let ls_=all;
+  if(S.fKind) ls_=ls_.filter(e=>e.kind===S.fKind);
+  if(S.fCat) ls_=ls_.filter(e=>e.cat===S.fCat);
+  ls_.sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt-a.createdAt);
+  if(!ls_.length){
+    const f=S.fKind||S.fCat;
+    h+='<div class="empty"><h2>'+(f?'Nada com esses filtros':'Nenhum lançamento em '+MESES[+S.month.slice(5)-1])+'</h2>'+
+      '<p>'+(f?'Mude os filtros acima para ver outros lançamentos.':'Lance aqui cada gasto (anúncios, ferramentas, equipe…) e cada receita, para saber quanto entra e quanto sai da empresa.')+'</p>'+
+      (f?'':'<button class="btn primary" data-act="fin-new">Novo lançamento</button>')+'</div>';
+  }else{
+    let day='';
+    h+='<div class="fin-list">';
+    ls_.forEach(e=>{
+      if(e.date!==day){
+        if(day) h+='</ul>';
+        day=e.date; const p=day.split('-').map(Number);
+        h+='<h2 class="group">'+p[2]+' de '+MES[p[1]-1]+' · '+DIAS[new Date(p[0],p[1]-1,p[2]).getDay()].toLowerCase()+'</h2><ul class="list">';
+      }
+      const who=nameOf(e.who);
+      h+='<li class="row"><div class="row-top"><button class="row-main" data-act="fin-open" data-id="'+e.id+'"><span class="row-title">'+esc(e.desc||e.cat)+'</span>'+
+        '<div class="chips"><span class="chip'+(isAd(e)?' p-media':'')+'">'+esc(e.cat)+'</span>'+(who?'<span class="chip">'+(e.kind==='despesa'?'Pago por ':'Recebido por ')+esc(who)+'</span>':'')+'</div></button>'+
+        '<span class="money '+(e.kind==='despesa'?'neg':'pos')+'">'+(e.kind==='despesa'?'− ':'+ ')+money(e.cents)+'</span></div></li>';
+    });
+    h+='</ul></div>';
+  }
+  app.innerHTML=h;
+}
+
+function openEntry(id){
+  if(id){ const e=S.fin.find(x=>x.id===id); if(!e) return; S.entry=clone(e); S.entryNew=false; }
+  else{
+    const td=ymd(new Date());
+    S.entry={id:uid('f'),kind:S.fKind==='receita'?'receita':'despesa',cents:0,date:td.slice(0,7)===S.month?td:S.month+'-01',desc:'',cat:'',who:'',notes:'',createdAt:Date.now(),createdBy:S.me};
+    S.entryNew=true;
+  }
+  S.entryDel=false; renderEntry(); $('#e-amount').focus();
+}
+function readEntry(){
+  const e=S.entry; if(!e||!$('#finForm')) return;
+  e.amt=$('#e-amount').value; e.date=$('#e-date').value; e.desc=$('#e-desc').value; e.cat=$('#e-cat').value; e.who=$('#e-who').value; e.notes=$('#e-notes').value;
+}
+function renderEntry(){
+  const e=S.entry, el=$('#fin'); el.hidden=false;
+  const sugg=[...new Set(CATS[e.kind].concat(S.fin.filter(x=>x.kind===e.kind).map(x=>x.cat)))];
+  const amt=e.amt!=null?e.amt:(e.cents?centsTxt(e.cents):'');
+  el.innerHTML='<div class="scrim"></div><div class="dialog" role="dialog" aria-modal="true" aria-label="Lançamento">'+
+    '<h2>'+(S.entryNew?'Novo lançamento':'Lançamento')+'</h2>'+
+    '<form id="finForm" class="fin-form">'+
+    '<div class="seg">'+[['despesa','Despesa'],['receita','Receita']].map(k=>'<button type="button" data-act="fin-kind" data-v="'+k[0]+'" aria-pressed="'+(e.kind===k[0])+'">'+k[1]+'</button>').join('')+'</div>'+
+    '<div class="fields"><label class="fld">Valor (R$)<input type="text" id="e-amount" inputmode="decimal" autocomplete="off" placeholder="0,00" value="'+esc(amt)+'"></label>'+
+    '<label class="fld">Data<input type="date" id="e-date" value="'+esc(e.date)+'"></label></div>'+
+    '<label class="fld">Descrição<input type="text" id="e-desc" maxlength="160" autocomplete="off" placeholder="'+(e.kind==='despesa'?'Ex.: campanha de outubro no Instagram':'Ex.: vendas do lançamento')+'" value="'+esc(e.desc)+'"></label>'+
+    '<div class="fields"><label class="fld">Categoria<input type="text" id="e-cat" list="e-cats" maxlength="60" autocomplete="off" placeholder="Escolha ou digite" value="'+esc(e.cat)+'"></label>'+
+    '<label class="fld">'+(e.kind==='despesa'?'Quem pagou':'Quem recebeu')+'<select id="e-who">'+opt('','Conta da empresa',e.who)+S.team.map(m=>opt(m.id,m.name,e.who)).join('')+'</select></label></div>'+
+    '<datalist id="e-cats">'+sugg.map(c=>'<option value="'+esc(c)+'">').join('')+'</datalist>'+
+    '<label class="fld">Observações<textarea id="e-notes" placeholder="Forma de pagamento, nota fiscal, detalhes.">'+esc(e.notes)+'</textarea></label>'+
+    '<div class="panel-foot">'+(S.entryDel
+      ?'<span class="hint">Excluir este lançamento para todos?</span><button type="button" class="btn danger" data-act="fin-del-yes">Excluir</button><button type="button" class="btn ghost" data-act="fin-del-no">Cancelar</button>'
+      :'<button type="submit" class="btn primary">Salvar</button><button type="button" class="btn ghost" data-act="fin-cancel">Cancelar</button>'+(S.entryNew?'':'<button type="button" class="btn danger" data-act="fin-del-ask">Excluir</button>'))+
+    '</div></form></div>';
+}
+function closeEntry(){ S.entry=null; $('#fin').hidden=true; $('#fin').innerHTML=''; }
+function submitEntry(){
+  readEntry();
+  const e=S.entry, c=parseMoney(e.amt);
+  if(!(c>0)){ toast('Digite um valor maior que zero, por exemplo 150,00.'); $('#e-amount').focus(); return; }
+  if(!e.date){ toast('Escolha a data.'); $('#e-date').focus(); return; }
+  const n=finNorm(Object.assign({},e,{cents:c,cat:e.cat.trim(),desc:e.desc.trim(),notes:e.notes.trim()}));
+  closeEntry(); saveEntry(n);
+  if(n.date.slice(0,7)!==S.month) toast('Salvo em '+monthLabel(n.date.slice(0,7)).toLowerCase()+'.');
+}
+
+/* ---------- modelos ---------- */
+// Moldes reaproveitáveis (tabela templates). Hoje só kind 'tarefa': data = {desc, prio, who, steps:[texto]}.
+// Criar uma tarefa a partir de um modelo copia os dados; mudar o modelo depois não altera tarefas já criadas.
+const tplFrom=r=>({id:r.id,kind:r.kind||'tarefa',name:r.name||'',data:r.data||{},createdAt:Number(r.created_at)||0,createdBy:r.created_by||''});
+const tplRow=t=>({id:t.id,kind:t.kind,name:t.name,data:t.data,created_at:t.createdAt,created_by:t.createdBy});
+const taskTpls=()=>S.tpl.filter(t=>t.kind==='tarefa').sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+function saveTpl(t){
+  const i=S.tpl.findIndex(x=>x.id===t.id); if(i>=0) S.tpl[i]=t; else S.tpl.push(t);
+  if(!db){ ls.set('pp_tpl',JSON.stringify(S.tpl)); render(); return; }
+  render(); quickWrite(db.from('templates').upsert(tplRow(t)));
+}
+function deleteTpl(id){
+  S.tpl=S.tpl.filter(x=>x.id!==id);
+  if(!db){ ls.set('pp_tpl',JSON.stringify(S.tpl)); render(); return; }
+  render(); quickWrite(db.from('templates').delete().eq('id',id));
+}
+function tplFromTask(t,id){
+  return {id:id||uid('m'),kind:'tarefa',name:t.title.trim(),createdAt:Date.now(),createdBy:S.me,
+    data:{desc:t.desc||'',prio:t.prio,who:t.who||'',steps:t.steps.map(s=>s.text.trim()).filter(Boolean)}};
+}
+// Aplica um modelo ao rascunho de uma tarefa nova: título (se vazio), subtarefas, prioridade, responsável e observações.
+function useTpl(id){
+  const m=S.tpl.find(x=>x.id===id), d=S.draft; if(!m||!d||d.fromTpl===id) return;
+  const x=m.data||{};
+  if(!d.title.trim()) d.title=m.name;
+  (x.steps||[]).forEach(text=>d.steps.push({id:uid('s'),text,done:false}));
+  if(PRIO[x.prio]) d.prio=x.prio;
+  if(x.who&&S.team.some(p=>p.id===x.who)) d.who=x.who;
+  if(!d.desc.trim()&&x.desc) d.desc=x.desc;
+  d.fromTpl=id;
+  renderSheet();
+  const ti=$('#f-title'); ti.focus(); ti.setSelectionRange(ti.value.length,ti.value.length);
+}
+// Abre um modelo para edição na mesma página da tarefa (S.tplMode).
+function openTpl(id){
+  const m=id?S.tpl.find(x=>x.id===id):null; if(id&&!m) return;
+  const x=(m&&m.data)||{};
+  S.tplMode=true; S.isNew=false; S.tplOpen=false; $('#tplDlg').hidden=true;
+  S.draft={id:m?m.id:uid('m'),title:m?m.name:'',desc:x.desc||'',scope:'equipe',area:'trabalho',who:x.who||'',prio:PRIO[x.prio]?x.prio:'media',status:'afazer',due:'',
+    steps:(x.steps||[]).map(text=>({id:uid('s'),text,done:false})),createdAt:m?m.createdAt:Date.now(),createdBy:m?m.createdBy:S.me};
+  renderSheet(); $('#f-title').focus();
+}
+function draftTpl(){
+  const d=S.draft;
+  return {id:d.id,kind:'tarefa',name:d.title.trim(),createdAt:d.createdAt,createdBy:d.createdBy||'',
+    data:{desc:d.desc,prio:d.prio,who:d.who||'',steps:d.steps.map(s=>s.text.trim()).filter(Boolean)}};
+}
+function renderTplDlg(){
+  const el=$('#tplDlg'); el.hidden=false;
+  const list=taskTpls();
+  const row=m=>S.tplDel===m.id
+    ?'<div class="person"><span class="ask">Excluir o modelo '+esc(m.name)+'? Tarefas já criadas com ele continuam.</span><button class="btn ghost" data-act="tpl-del-no">Cancelar</button><button class="btn danger" data-act="tpl-del-yes" data-id="'+m.id+'">Excluir</button></div>'
+    :'<div class="person"><button class="pick" data-act="tpl-edit" data-id="'+m.id+'">'+esc(m.name)+' <span class="hint">· '+((m.data.steps||[]).length)+' subtarefas</span></button>'+
+      '<button class="mini" data-act="tpl-del" data-id="'+m.id+'" aria-label="Excluir modelo '+esc(m.name)+'" title="Excluir">✕</button></div>';
+  el.innerHTML='<div class="scrim" data-act="tpl-close"></div><div class="dialog" role="dialog" aria-modal="true" aria-label="Modelos de tarefa">'+
+    '<h2>Modelos de tarefa</h2>'+
+    (S.tplErr?'<p class="notice">Os modelos ainda não foram ativados no banco de dados. É preciso rodar o trecho de modelos do arquivo supabase.sql no Supabase (SQL Editor).</p>':
+    '<p>Moldes com as subtarefas que sempre se repetem. Em "Nova tarefa", escolha um modelo e tudo vem preenchido. Mudar um modelo não altera tarefas já criadas.</p>'+
+    '<div class="people">'+list.map(row).join('')+'</div>'+
+    (list.length?'':'<button class="btn" data-act="tpl-seed">Criar o modelo "Criativo" (Copy, Conteúdos, Edição)</button>'))+
+    '<div class="panel-foot">'+(S.tplErr?'':'<button class="btn primary" data-act="tpl-new">Novo modelo</button>')+'<button class="btn ghost" data-act="tpl-close">Fechar</button></div></div>';
 }
 
 /* ---------- eventos ---------- */
@@ -558,6 +814,14 @@ document.addEventListener('click',e=>{
   const a=b.dataset.act, id=b.dataset.id, d=S.draft;
   if(a==='tab'){ S.tab=b.dataset.v; ls.set('pp_tab',S.tab); render(); }
   else if(a==='period'){ S.period=b.dataset.v; ls.set('pp_period',S.period); render(); }
+  else if(a==='section'){ S.section=b.dataset.v; ls.set('pp_section',S.section); render(); }
+  else if(a==='month'){ S.month=addMonths(S.month,+b.dataset.d); S.fCat=''; render(); }
+  else if(a==='fin-new') openEntry(null);
+  else if(a==='fin-open') openEntry(id);
+  else if(a==='fin-kind'){ readEntry(); S.entry.kind=b.dataset.v; renderEntry(); }
+  else if(a==='fin-cancel') closeEntry();
+  else if(a==='fin-del-ask'||a==='fin-del-no'){ readEntry(); S.entryDel=a==='fin-del-ask'; renderEntry(); }
+  else if(a==='fin-del-yes'){ const fid=S.entry.id; closeEntry(); deleteEntry(fid); }
   else if(a==='move'){
     // A ordem dentro do mesmo dia e prioridade vem de createdAt: trocar os valores troca as posições.
     const t=byId(id), o=byId(b.dataset.to); if(!t||!o) return;
@@ -594,7 +858,22 @@ document.addEventListener('click',e=>{
   else if(a==='st-up'||a==='st-down'){ const i=+b.dataset.i, j=a==='st-up'?i-1:i+1; if(j<0||j>=d.steps.length) return; const x=d.steps[i]; d.steps[i]=d.steps[j]; d.steps[j]=x; renderSteps(); touch(true); }
   else if(a==='del-ask') renderFoot(true);
   else if(a==='del-cancel') renderFoot(false);
-  else if(a==='del-yes'){ const did=d.id; clearTimeout(saveTimer); saveTimer=null; S.draft=null; $('#sheet').hidden=true; $('#sheet').innerHTML=''; removeTask(did); }
+  else if(a==='del-yes'){ const did=d.id, wasTpl=S.tplMode; clearTimeout(saveTimer); saveTimer=null; S.draft=null; S.tplMode=false; $('#sheet').hidden=true; $('#sheet').innerHTML=''; if(wasTpl) deleteTpl(did); else removeTask(did); }
+  else if(a==='use-tpl') useTpl(id);
+  else if(a==='to-tpl'){
+    commit(); const t=draftTask(); if(!t.title){ toast('Dê um título para a tarefa antes.'); return; }
+    const same=S.tpl.find(m=>m.kind==='tarefa'&&m.name.toLowerCase()===t.title.toLowerCase());
+    const m=tplFromTask(t,same&&same.id); if(same){ m.createdAt=same.createdAt; m.createdBy=same.createdBy; }
+    saveTpl(m); toast('Modelo "'+m.name+'" '+(same?'atualizado':'criado')+'. Ele aparece ao criar uma nova tarefa.');
+  }
+  else if(a==='tpl-open'){ S.tplOpen=true; S.tplDel=''; render(); }
+  else if(a==='tpl-close'){ S.tplOpen=false; render(); }
+  else if(a==='tpl-edit') openTpl(id);
+  else if(a==='tpl-new') openTpl(null);
+  else if(a==='tpl-del'){ S.tplDel=id; render(); }
+  else if(a==='tpl-del-no'){ S.tplDel=''; render(); }
+  else if(a==='tpl-del-yes'){ S.tplDel=''; deleteTpl(id); }
+  else if(a==='tpl-seed') saveTpl({id:uid('m'),kind:'tarefa',name:'Criativo',createdAt:Date.now(),createdBy:S.me,data:{desc:'',prio:'media',who:'',steps:['Copy','Conteúdos','Edição']}});
 });
 document.addEventListener('change',e=>{
   const t=e.target;
@@ -622,7 +901,7 @@ document.addEventListener('input',e=>{
   else if(t.dataset.k&&(t.id==='f-title'||t.id==='f-desc')){ S.draft[t.dataset.k]=t.value; touch(false); }
 });
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){ if(S.draft) closeSheet(); else if(S.teamOpen){ S.teamOpen=false; render(); } return; }
+  if(e.key==='Escape'){ if(S.tplOpen&&!S.draft){ S.tplOpen=false; render(); } else if(S.entry) closeEntry(); else if(S.draft) closeSheet(); else if(S.teamOpen){ S.teamOpen=false; render(); } return; }
   if(e.key!=='Enter') return;
   const t=e.target;
   if(t.id==='f-rename'){ e.preventDefault(); saveRename(S.editMember); }
@@ -647,6 +926,7 @@ document.addEventListener('submit',e=>{
     },()=>showLogin('Não foi possível entrar. Confira a internet e tente de novo.'));
     return;
   }
+  if(e.target.id==='finForm'){ e.preventDefault(); submitEntry(); return; }
   if(e.target.id!=='addMember') return;
   e.preventDefault();
   const inp=$('#f-member'), name=inp.value.trim(); if(!name) return;

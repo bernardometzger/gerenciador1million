@@ -1,6 +1,6 @@
 # Passo a Passo — gerenciador de tarefas
 
-Site interno de uma empresa pequena (dois sócios hoje, pode crescer) para organizar tarefas da empresa e pessoais. A ideia central: cada tarefa é quebrada em passos pequenos, para que na hora de fazer seja só executar.
+Site interno de uma empresa pequena (dois sócios hoje, pode crescer) com duas partes: **Tarefas** (to-do da empresa e pessoais) e **Finanças** (lançamentos de despesas e receitas). A meta é concentrar aqui a gestão da empresa. A ideia central: cada tarefa é quebrada em passos pequenos, para que na hora de fazer seja só executar.
 
 O dono do projeto não é programador. Responda em português, explique em linguagem simples e diga o que foi e o que não foi testado.
 
@@ -18,8 +18,10 @@ Site estático, sem build e sem framework.
 
 - `tasks`: `id`, `title`, `descr`, `scope` (`equipe` = empresa, `pessoal`), `who` (id em `members`), `prio` (`alta`/`media`/`baixa`), `status` (`afazer`/`feito`), `due` (date, pode ser nulo), `steps` (jsonb: `[{id, text, done}]`), `created_at` (ms), `created_by`.
 - `members`: `id`, `name`, `created_at`. É a lista de pessoas da equipe, separada dos usuários de login.
+- `finance`: `id`, `kind` (`despesa`/`receita`), `amount_cents` (bigint, centavos), `date`, `descr`, `category` (texto livre, com sugestões), `who` (quem pagou/recebeu, id em `members`; vazio = conta da empresa), `notes`, `created_at` (ms), `created_by`. Criada pelo trecho "Finanças" do `supabase.sql`.
+- `templates`: `id`, `kind` (hoje só `tarefa`), `name`, `data` (jsonb; para tarefa: `{desc, prio, who, steps:[texto]}`), `created_at` (ms), `created_by`. Criada pelo trecho "Modelos" do `supabase.sql`.
 - RLS: qualquer usuário autenticado lê e grava tudo. Não há cadastro aberto; os logins são criados à mão em Authentication > Users.
-- Realtime ligado nas duas tabelas; o site refaz a leitura a cada mudança.
+- Realtime ligado nas quatro tabelas; o site refaz a leitura a cada mudança. As leituras de `finance` e `templates` são separadas: se a tabela não existir, as tarefas continuam funcionando e a parte afetada mostra um aviso.
 
 ## Como o código funciona
 
@@ -41,6 +43,13 @@ Site estático, sem build e sem framework.
 - Na lista, cada tarefa mostra a próxima subtarefa pendente e uma barra de progresso.
 - Na página da tarefa, os botões do rodapé ("Criar tarefa", "Excluir tarefa", "Pronto") ficam todos à esquerda, lado a lado. Nada clicável no canto inferior direito: o selo da Netlify cobre essa área. Enter no título leva ao campo de subtarefa.
 - Visual: fundo mais escuro e tarefas em blocos claros com borda, para contraste nítido; temas claro e escuro pelos tokens em `:root`.
+
+- Finanças: seletor de mês na barra; quatro quadros (Receitas, Despesas, Saldo do mês, Anúncios com % das despesas); despesas por categoria; lista por dia. Categoria conta como anúncio quando começa com "Anúncio". Lançamento abre numa janela com Salvar/Cancelar/Excluir à esquerda; gravação otimista com `finBusy` impedindo leituras velhas.
+- Categorias sugeridas: despesas — Anúncios Meta, Anúncios Google, Anúncios outros, Ferramentas e assinaturas, Equipe e freelancers, Produção de conteúdo, Impostos e taxas, Outros; receitas — Vendas, Serviços, Outros. Dá para digitar outras.
+
+- **Modelos (moldes), não orientação a objetos:** decisão do dono em 22/10/2026. Tipos que se repetem (ex.: "Criativo": Copy, Conteúdos, Edição) são dados na tabela `templates`, criados e editados na tela, nunca classes no código. Criar uma tarefa a partir de um modelo **copia** os dados; mudar o modelo não altera tarefas já criadas.
+- Modelos de tarefa: botão "Modelos" na barra de filtros (lista, editar, excluir, criar o exemplo Criativo); "Usar modelo" no topo da página de nova tarefa; "Salvar como modelo" no rodapé de uma tarefa existente (mesmo nome atualiza o modelo). O modelo é editado na mesma página da tarefa (`S.tplMode`), sem situação, prazo e "onde aparece".
+- Próximas etapas combinadas: (2) modelos e repetição de lançamentos e de tarefas, com identificação fixa por ocorrência para não duplicar quando duas pessoas abrem o site; (3) campanhas ligando criativos (tarefas) e gastos/receitas; (4) automação de passos dos modelos.
 
 ## Ainda não feito
 

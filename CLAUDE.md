@@ -43,7 +43,7 @@ Site estático, sem build e sem framework.
 - Clicar numa tarefa "entra" nela: página inteira (não painel lateral) com as **subtarefas** em primeiro plano; situação, prioridade, responsável, prazo e observações ficam recolhidos em "Detalhes". Na tela o nome é "subtarefas"; no banco e no código continuam sendo `steps`.
 - Na lista, cada tarefa mostra a próxima subtarefa pendente e uma barra de progresso.
 - Na página da tarefa, os botões do rodapé ("Criar tarefa", "Excluir tarefa", "Pronto") ficam todos à esquerda, lado a lado. Nada clicável no canto inferior direito: o selo da Netlify cobre essa área. Enter no título leva ao campo de subtarefa.
-- Visual: fundo mais escuro e tarefas em blocos claros com borda, para contraste nítido; temas claro e escuro pelos tokens em `:root`.
+- Visual: fundo mais escuro e tarefas em blocos claros com borda, para contraste nítido; temas claro e escuro pelos tokens em `:root`. Botão ☾/☀ na barra troca o tema e guarda em `pp_theme`; sem escolha, segue o aparelho.
 
 - Finanças tem dois modos na barra, **Geral** e **Ofertas**, e um seletor de mês. Tudo fica na tabela `finance`; cada tela só filtra, para os números sempre baterem.
 - **Geral** é a empresa inteira e tem três abas. **Painel**: Lucro líquido, Faturamento, Gastos totais, ROAS (faturamento ÷ anúncios), ROI (lucro ÷ gastos totais) e Lucro médio por dia; comparação com o mês anterior no mesmo período (no mês corrente, até o mesmo dia); gráfico de lucro por dia, com clique no dia; cobertura dos gastos gerais pelo lucro das ofertas; ranking das ofertas. **Gastos** e **Receitas**: listas compactas, sem cartões grandes, com filtros Onde e Categoria, total do filtrado e categorias clicáveis. Gastos de anúncio das ofertas entram como "Anúncios".

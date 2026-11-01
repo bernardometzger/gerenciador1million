@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<script>try{var t=localStorage.getItem('pp_theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
 <style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -20,6 +21,7 @@
   --shadow:0 1px 2px rgba(22,32,43,.08),0 8px 20px rgba(22,32,43,.06);
   --display:'Bricolage Grotesque','Trebuchet MS',system-ui,sans-serif;
   --body:'Instrument Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  color-scheme:light;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -55,6 +57,7 @@ h1,h2,h3,h4,p{margin:0}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
 .grow{flex:1 1 0;min-width:0}
 .me{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.theme{flex:none;width:34px;height:34px;padding:0;border:1px solid var(--line);background:var(--surface);border-radius:50%;font-size:16px;line-height:1}
 .btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 14px;font-weight:500}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
 .btn.danger{color:var(--hi);border-color:var(--hi)}
@@ -456,6 +459,8 @@ function rowHtml(t){
   return h+'</li>';
 }
 function opt(v,l,cur){return '<option value="'+esc(v)+'"'+(v===cur?' selected':'')+'>'+esc(l)+'</option>';}
+// Sem escolha salva, segue o tema do aparelho; o botão grava a escolha em pp_theme.
+const isDark=()=>{ const t=document.documentElement.getAttribute('data-theme'); return t?t==='dark':!!(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches); };
 function renderBar(){
   const seg=(act,cur,items)=>'<div class="seg">'+items.map(i=>'<button data-act="'+act+'" data-v="'+i[0]+'" aria-pressed="'+(cur===i[0])+'">'+i[1]+'</button>').join('')+'</div>';
   const fin=S.section==='financas';
@@ -466,6 +471,7 @@ function renderBar(){
       :seg('tab',S.tab,[['empresa','Empresa'],['pessoal','Pessoal']])+
        seg('period',S.period,[['tudo','Tudo'],['semana','Semana'],['hoje','Hoje']]))+
     '<div class="grow"></div>'+
+    '<button class="theme" data-act="theme" aria-label="'+(isDark()?'Mudar para modo claro':'Mudar para modo escuro')+'" title="'+(isDark()?'Modo claro':'Modo escuro')+'">'+(isDark()?'☀':'☾')+'</button>'+
     '<button class="me" data-act="team" title="Trocar de pessoa ou adicionar alguém">'+esc(nameOf(S.me)||'Quem é você?')+'</button>'+
     (fin?'<button class="btn primary" data-act="fin-new">Novo lançamento</button>':'<button class="btn primary" data-act="new">Nova tarefa</button>');
 }
@@ -1002,6 +1008,7 @@ document.addEventListener('click',e=>{
   const a=b.dataset.act, id=b.dataset.id, d=S.draft;
   if(a==='tab'){ S.tab=b.dataset.v; ls.set('pp_tab',S.tab); render(); }
   else if(a==='period'){ S.period=b.dataset.v; ls.set('pp_period',S.period); render(); }
+  else if(a==='theme'){ const t=isDark()?'light':'dark'; document.documentElement.setAttribute('data-theme',t); ls.set('pp_theme',t); renderBar(); }
   else if(a==='section'){ S.section=b.dataset.v; ls.set('pp_section',S.section); render(); }
   else if(a==='month'){ S.month=addMonths(S.month,+b.dataset.d); S.fCat=''; S.dayPick=''; render(); }
   else if(a==='finview'){ S.finView=b.dataset.v; S.offerId=''; S.fCat=''; ls.set('pp_finview',S.finView); render(); }

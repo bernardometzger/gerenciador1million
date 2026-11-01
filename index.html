@@ -183,6 +183,42 @@ select,input[type=text],input[type=date],textarea{background:var(--surface);bord
 .cbar i{display:block;height:100%;background:var(--hi);border-radius:3px}
 .money{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap;align-self:center}
 .fin-list{display:flex;flex-direction:column;gap:6px}
+.gen-tabs{align-self:flex-start}
+.tiles.six{grid-template-columns:repeat(3,minmax(0,1fr))}
+.dchart{position:relative;display:flex;gap:2px;height:150px;margin-bottom:18px}
+.dchart u{position:absolute;left:0;right:0;height:1px;background:var(--line)}
+.dcol{position:relative;flex:1 1 0;min-width:0;border:0;background:transparent;padding:0;border-radius:3px}
+button.dcol:hover,.dcol.on{background:var(--sunken)}
+.dcol i{position:absolute;left:50%;transform:translateX(-50%);width:min(100%,14px)}
+.dcol i.pos{background:var(--ok);border-radius:4px 4px 0 0}
+.dcol i.neg{background:var(--hi);border-radius:0 0 4px 4px}
+.dcol em{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:3px;font-style:normal;font-size:12px;color:var(--muted)}
+.dpick b{font-weight:600;color:var(--ink)}
+.catb{width:100%;text-align:left;border:0;background:transparent;color:inherit;padding:4px;border-radius:6px}
+.catb[aria-pressed="true"]{background:var(--accent-soft)}
+.catb .cbar{display:block}
+.box .group .hint{font-family:var(--body);font-weight:400}
+.ledger{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.ledger li+li{border-top:1px solid var(--line)}
+.ledger button{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;text-align:left;border:0;background:transparent;padding:8px 12px}
+.ledger button:hover{background:var(--sunken)}
+.ld{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.lt{display:flex;flex-direction:column;min-width:0}
+.lt b{font-weight:500;overflow-wrap:anywhere}
+.lt small{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.offer{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 10px;align-items:center;width:100%;text-align:left;border:0;border-top:1px solid var(--line);background:transparent;padding:11px 2px}
+.offer:first-of-type{border-top:0}
+.offer-name{font-weight:600;overflow-wrap:anywhere}
+.offer-sub{grid-column:1/-1}
+.cbar.pos i{background:var(--ok)}
+.offer-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.offer-head h2{font-family:var(--display);font-size:22px;overflow-wrap:anywhere}
+.tscroll{overflow-x:auto}
+.days{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+.days th{font-size:12px;font-weight:600;color:var(--muted);text-align:right;padding:4px 8px}
+.days td{text-align:right;padding:7px 8px;border-top:1px solid var(--line);white-space:nowrap}
+.days th:first-child,.days td:first-child{text-align:left;padding-left:0}
+.days td:last-child{font-weight:600}
 .btn.sm{padding:5px 12px;font-size:13px}
 .tpl-pick{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .tpl-pick button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-weight:500}
@@ -192,8 +228,10 @@ select,input[type=text],input[type=date],textarea{background:var(--surface);bord
 .fin-form .seg{align-self:flex-start}
 .fin-form .panel-foot{padding-top:4px}
 @media (max-width:760px){
-  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .tiles,.tiles.six{grid-template-columns:repeat(2,minmax(0,1fr))}
   .tile b{font-size:18px}
+  .days{font-size:13px}
+  .days th,.days td{padding-left:4px;padding-right:4px}
   .board{grid-template-columns:minmax(0,1fr)}
   .stats{margin-left:0;width:100%}
   .fields{grid-template-columns:minmax(0,1fr)}
@@ -227,7 +265,7 @@ const ls={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k
 function ymdNow(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 const S={remote:[],tasks:[],team:[],me:ls.get('pp_me')||'',tab:ls.get('pp_tab')||'empresa',view:ls.get('pp_view')||'quadro',
   period:['semana','hoje'].indexOf(ls.get('pp_period'))>=0?ls.get('pp_period'):'tudo',person:'',fPrio:'',fWho:'',fArea:'',expanded:new Set(),ready:false,teamReady:false,local:false,canWrite:true,draft:null,isNew:false,teamOpen:false,
-  section:ls.get("pp_section")==="financas"?"financas":"tarefas",fin:[],finErr:false,month:ymdNow().slice(0,7),fKind:"",fCat:"",entry:null,tpl:[],tplErr:false,tplMode:false,tplOpen:false,tplDel:""};
+  section:ls.get("pp_section")==="financas"?"financas":"tarefas",fin:[],finErr:false,month:ymdNow().slice(0,7),fCat:"",fOffer:"",dayPick:"",genView:["gastos","receitas"].indexOf(ls.get("pp_genview"))>=0?ls.get("pp_genview"):"painel",entry:null,finView:ls.get("pp_finview")==="ofertas"?"ofertas":"geral",offers:[],offerErr:false,offerId:"",offerForm:null,tpl:[],tplErr:false,tplMode:false,tplOpen:false,tplDel:""};
 let db=null;
 const over={},pending={},inflight={};
 
@@ -296,6 +334,7 @@ async function boot(){
     try{ S.remote=(JSON.parse(ls.get('pp_tasks')||'[]')).map(norm); S.team=JSON.parse(ls.get('pp_team')||'[]'); }catch(e){ S.remote=[]; S.team=[]; }
     try{ S.fin=(JSON.parse(ls.get('pp_fin')||'[]')).map(finNorm); }catch(e){ S.fin=[]; }
     try{ S.tpl=(JSON.parse(ls.get('pp_tpl')||'[]')).map(tplFrom); }catch(e){ S.tpl=[]; }
+    try{ S.offers=(JSON.parse(ls.get('pp_offers')||'[]')).map(offerFrom); }catch(e){ S.offers=[]; }
     S.ready=S.teamReady=true; merge(); render(); return;
   }
   db=window.supabase.createClient(cfg.url,cfg.key);
@@ -313,13 +352,14 @@ async function fetchAll(){
   try{
     // Finanças e modelos vêm à parte: se a tabela ainda não existir no banco, as tarefas continuam funcionando.
     const soft=q=>Promise.resolve(q).catch(e=>({error:e}));
-    const [a,b,c,m]=await Promise.all([db.from('tasks').select('*'),db.from('members').select('*').order('created_at'),
-      soft(db.from('finance').select('*')),soft(db.from('templates').select('*'))]);
+    const [a,b,c,m,o]=await Promise.all([db.from('tasks').select('*'),db.from('members').select('*').order('created_at'),
+      soft(db.from('finance').select('*')),soft(db.from('templates').select('*')),soft(db.from('offers').select('*').order('created_at'))]);
     if(a.error||b.error) throw (a.error||b.error);
     if(w===wrote&&!busyW){
       S.remote=a.data.map(fromRow); S.team=b.data.map(m=>({id:m.id,name:m.name}));
       S.finErr=!!c.error; if(!c.error) S.fin=c.data.map(finFrom);
       S.tplErr=!!m.error; if(!m.error) S.tpl=m.data.map(tplFrom);
+      S.offerErr=!!o.error; if(!o.error) S.offers=o.data.map(offerFrom);
       S.ready=S.teamReady=true; merge(); render();
     }else again=true;
   }catch(e){ toast('Não foi possível carregar as tarefas. Confira a internet e recarregue a página.'); }
@@ -333,7 +373,8 @@ function start(){
   db.channel('pp').on('postgres_changes',{event:'*',schema:'public',table:'tasks'},soon)
     .on('postgres_changes',{event:'*',schema:'public',table:'members'},soon)
     .on('postgres_changes',{event:'*',schema:'public',table:'finance'},soon)
-    .on('postgres_changes',{event:'*',schema:'public',table:'templates'},soon).subscribe();
+    .on('postgres_changes',{event:'*',schema:'public',table:'templates'},soon)
+    .on('postgres_changes',{event:'*',schema:'public',table:'offers'},soon).subscribe();
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden) soon(); });
   window.addEventListener('online',soon);
 }
@@ -421,7 +462,7 @@ function renderBar(){
   $('#bar').innerHTML='<div class="brand">Passo <i>a</i> Passo</div>'+
     seg('section',S.section,[['tarefas','Tarefas'],['financas','Finanças']])+
     (fin
-      ?'<div class="seg month"><button data-act="month" data-d="-1" aria-label="Mês anterior">‹</button><span>'+monthLabel(S.month)+'</span><button data-act="month" data-d="1" aria-label="Próximo mês">›</button></div>'
+      ?seg('finview',S.finView,[['geral','Geral'],['ofertas','Ofertas']])+'<div class="seg month"><button data-act="month" data-d="-1" aria-label="Mês anterior">‹</button><span>'+monthLabel(S.month)+'</span><button data-act="month" data-d="1" aria-label="Próximo mês">›</button></div>'
       :seg('tab',S.tab,[['empresa','Empresa'],['pessoal','Pessoal']])+
        seg('period',S.period,[['tudo','Tudo'],['semana','Semana'],['hoje','Hoje']]))+
     '<div class="grow"></div>'+
@@ -601,7 +642,7 @@ function addSteps(text){
 
 /* ---------- finanças ---------- */
 // Lançamentos de despesas e receitas da empresa (tabela finance). Valores guardados em centavos.
-const CATS={despesa:['Anúncios Meta','Anúncios Google','Anúncios outros','Ferramentas e assinaturas','Equipe e freelancers','Produção de conteúdo','Impostos e taxas','Outros'],
+const CATS={despesa:['Anúncios','Assinaturas','Tokens','Chips','Equipe e freelancers','Produção de conteúdo','Impostos e taxas','Outros'],
   receita:['Vendas','Serviços','Outros']};
 const MESES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
 const BRL=new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
@@ -618,10 +659,10 @@ function monthLabel(m){ const p=m.split('-').map(Number); return MESES[p[1]-1].r
 function addMonths(m,n){ const p=m.split('-').map(Number), d=new Date(p[0],p[1]-1+n,1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 function finNorm(e){
   return {id:e.id,kind:e.kind==='receita'?'receita':'despesa',cents:Math.round(Number(e.cents)||0),date:e.date||ymd(new Date()),desc:e.desc||'',
-    cat:e.cat||'Outros',who:e.who||'',notes:e.notes||'',createdAt:e.createdAt||0,createdBy:e.createdBy||''};
+    cat:e.cat||'Outros',who:e.who||'',notes:e.notes||'',offer:e.offer||'',createdAt:e.createdAt||0,createdBy:e.createdBy||''};
 }
-const finRow=e=>({id:e.id,kind:e.kind,amount_cents:e.cents,date:e.date,descr:e.desc,category:e.cat,who:e.who,notes:e.notes,created_at:e.createdAt,created_by:e.createdBy});
-const finFrom=r=>finNorm({id:r.id,kind:r.kind,cents:Number(r.amount_cents),date:r.date,desc:r.descr,cat:r.category,who:r.who,notes:r.notes,createdAt:Number(r.created_at)||0,createdBy:r.created_by});
+const finRow=e=>({id:e.id,kind:e.kind,amount_cents:e.cents,date:e.date,descr:e.desc,category:e.cat,who:e.who,notes:e.notes,offer_id:e.offer,created_at:e.createdAt,created_by:e.createdBy});
+const finFrom=r=>finNorm({id:r.id,kind:r.kind,cents:Number(r.amount_cents),date:r.date,desc:r.descr,cat:r.category,who:r.who,notes:r.notes,offer:r.offer_id,createdAt:Number(r.created_at)||0,createdBy:r.created_by});
 
 // Gravação otimista simples: a tela muda na hora; se o banco recusar, avisa e relê tudo.
 // Usada por finanças e modelos. Enquanto houver gravação em andamento (busyW), fetchAll não aplica leituras, para não trazer dados velhos.
@@ -642,83 +683,194 @@ function deleteEntry(id){
   render(); quickWrite(db.from('finance').delete().eq('id',id));
 }
 
+function sumFin(l){ return l.reduce((a,e)=>a+e.cents,0); }
+// Números de um conjunto de lançamentos: faturamento, anúncios, outros gastos e lucro.
+function finStats(l){
+  const rev=sumFin(l.filter(e=>e.kind==='receita')), ads=sumFin(l.filter(isAd)), other=sumFin(l.filter(e=>e.kind==='despesa'&&!isAd(e)));
+  return {rev,ads,other,cost:ads+other,profit:rev-ads-other};
+}
+const signed=c=>(c>0?'+ ':c<0?'− ':'')+money(Math.abs(c));
+const pn=c=>c<0?'neg':'pos';
+function roas(s){ return s.ads?(s.rev/s.ads).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'x':'—'; }
+const tile=(l,v,cls,sub)=>'<div class="tile"><span>'+l+'</span><b'+(cls?' class="'+cls+'"':'')+'>'+v+'</b>'+(sub?'<small>'+sub+'</small>':'')+'</div>';
+const monthEntries=()=>S.fin.filter(e=>e.date.slice(0,7)===S.month);
+const offerOf=id=>S.offers.find(o=>o.id===id);
+function entryList(l,showOffer){
+  const items=l.slice().sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt-a.createdAt);
+  let day='', h='<div class="fin-list">';
+  items.forEach(e=>{
+    if(e.date!==day){
+      if(day) h+='</ul>';
+      day=e.date; const p=day.split('-').map(Number);
+      h+='<h2 class="group">'+p[2]+' de '+MES[p[1]-1]+' · '+DIAS[new Date(p[0],p[1]-1,p[2]).getDay()].toLowerCase()+'</h2><ul class="list">';
+    }
+    const who=nameOf(e.who), of=offerOf(e.offer);
+    h+='<li class="row"><div class="row-top"><button class="row-main" data-act="fin-open" data-id="'+e.id+'"><span class="row-title">'+esc(e.desc||e.cat)+'</span>'+
+      '<div class="chips">'+(showOffer&&of?'<span class="chip today">'+esc(of.name)+'</span>':'')+'<span class="chip'+(isAd(e)?' p-media':'')+'">'+esc(e.cat)+'</span>'+
+      (who?'<span class="chip">'+(e.kind==='despesa'?'Pago por ':'Recebido por ')+esc(who)+'</span>':'')+'</div></button>'+
+      '<span class="money '+(e.kind==='despesa'?'neg':'pos')+'">'+(e.kind==='despesa'?'− ':'+ ')+money(e.cents)+'</span></div></li>';
+  });
+  return h+'</ul></div>';
+}
 function renderFin(){
   const app=$('#app');
   if(S.finErr){ app.innerHTML='<p class="notice">A parte de finanças ainda não foi ativada no banco de dados. É preciso rodar o trecho de finanças do arquivo supabase.sql no Supabase (SQL Editor).</p>'; return; }
-  const all=S.fin.filter(e=>e.date.slice(0,7)===S.month);
-  const sum=l=>l.reduce((a,e)=>a+e.cents,0);
-  const inc=sum(all.filter(e=>e.kind==='receita')), exp=sum(all.filter(e=>e.kind==='despesa')), ads=sum(all.filter(isAd)), bal=inc-exp;
   let h='';
   if(S.local) h+='<p class="notice">Modo local: o banco de dados ainda não foi configurado (config.js), então os lançamentos ficam só neste navegador.</p>';
-  h+='<div class="tiles">'+
-    '<div class="tile"><span>Receitas</span><b class="pos">'+money(inc)+'</b></div>'+
-    '<div class="tile"><span>Despesas</span><b class="neg">'+money(exp)+'</b></div>'+
-    '<div class="tile"><span>Saldo do mês</span><b class="'+(bal<0?'neg':'pos')+'">'+money(bal)+'</b></div>'+
-    '<div class="tile"><span>Anúncios</span><b>'+money(ads)+'</b><small>'+(exp?Math.round(ads/exp*100)+'% das despesas':'—')+'</small></div></div>';
-  const cats=[...new Set(all.map(e=>e.cat))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
-  if(S.fCat&&cats.indexOf(S.fCat)<0) cats.push(S.fCat);
-  h+='<div class="tools"><label>Tipo <select data-f="fKind">'+opt('','Todos',S.fKind)+opt('despesa','Despesas',S.fKind)+opt('receita','Receitas',S.fKind)+'</select></label>'+
-    '<label>Categoria <select data-f="fCat">'+opt('','Todas',S.fCat)+cats.map(c=>opt(c,c,S.fCat)).join('')+'</select></label></div>';
-  if(exp){
-    const by={}; all.filter(e=>e.kind==='despesa').forEach(e=>{ by[e.cat]=(by[e.cat]||0)+e.cents; });
-    const rows=Object.keys(by).sort((a,b)=>by[b]-by[a]), max=by[rows[0]];
-    h+='<section class="box"><h2 class="group">Despesas por categoria</h2>'+rows.map(c=>'<div class="cat"><span>'+esc(c)+'</span><span class="money">'+money(by[c])+' · '+Math.round(by[c]/exp*100)+'%</span>'+
-      '<div class="cbar"><i style="width:'+Math.max(2,Math.round(by[c]/max*100))+'%"></i></div></div>').join('')+'</section>';
-  }
-  let ls_=all;
-  if(S.fKind) ls_=ls_.filter(e=>e.kind===S.fKind);
-  if(S.fCat) ls_=ls_.filter(e=>e.cat===S.fCat);
-  ls_.sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt-a.createdAt);
-  if(!ls_.length){
-    const f=S.fKind||S.fCat;
-    h+='<div class="empty"><h2>'+(f?'Nada com esses filtros':'Nenhum lançamento em '+MESES[+S.month.slice(5)-1])+'</h2>'+
-      '<p>'+(f?'Mude os filtros acima para ver outros lançamentos.':'Lance aqui cada gasto (anúncios, ferramentas, equipe…) e cada receita, para saber quanto entra e quanto sai da empresa.')+'</p>'+
-      (f?'':'<button class="btn primary" data-act="fin-new">Novo lançamento</button>')+'</div>';
-  }else{
-    let day='';
-    h+='<div class="fin-list">';
-    ls_.forEach(e=>{
-      if(e.date!==day){
-        if(day) h+='</ul>';
-        day=e.date; const p=day.split('-').map(Number);
-        h+='<h2 class="group">'+p[2]+' de '+MES[p[1]-1]+' · '+DIAS[new Date(p[0],p[1]-1,p[2]).getDay()].toLowerCase()+'</h2><ul class="list">';
-      }
-      const who=nameOf(e.who);
-      h+='<li class="row"><div class="row-top"><button class="row-main" data-act="fin-open" data-id="'+e.id+'"><span class="row-title">'+esc(e.desc||e.cat)+'</span>'+
-        '<div class="chips"><span class="chip'+(isAd(e)?' p-media':'')+'">'+esc(e.cat)+'</span>'+(who?'<span class="chip">'+(e.kind==='despesa'?'Pago por ':'Recebido por ')+esc(who)+'</span>':'')+'</div></button>'+
-        '<span class="money '+(e.kind==='despesa'?'neg':'pos')+'">'+(e.kind==='despesa'?'− ':'+ ')+money(e.cents)+'</span></div></li>';
-    });
-    h+='</ul></div>';
-  }
+  if(S.finView==='ofertas') h+=S.offerErr?'<p class="notice">As ofertas ainda não foram ativadas no banco de dados. É preciso rodar o trecho de ofertas do arquivo supabase.sql no Supabase (SQL Editor).</p>':(offerOf(S.offerId)?offerPage():offersPage());
+  else h+=generalPage();
   app.innerHTML=h;
+}
+// Geral: a empresa inteira. Gastos com anúncio das ofertas chegam aqui como "Anúncios".
+const catLabel=e=>e.kind==='receita'?e.cat:isAd(e)?'Anúncios':e.offer?'Outros de ofertas':e.cat;
+const pct0=v=>Math.round(v).toLocaleString('pt-BR')+'%';
+function generalPage(){
+  const tab=(v,l)=>'<button data-act="genview" data-v="'+v+'" aria-pressed="'+(S.genView===v)+'">'+l+'</button>';
+  const h='<div class="seg gen-tabs">'+tab('painel','Painel')+tab('gastos','Gastos')+tab('receitas','Receitas')+'</div>';
+  return h+(S.genView==='painel'?dashboard():ledger(S.genView==='gastos'?'despesa':'receita'));
+}
+// Compara com o mês anterior no mesmo período: no mês corrente, só até o mesmo dia, para não comparar mês parcial com mês inteiro.
+function prevPeriod(){
+  const pm=addMonths(S.month,-1), today=ymdNow(), cut=today.slice(0,7)===S.month?+today.slice(8):31;
+  return {list:S.fin.filter(e=>e.date.slice(0,7)===pm&&+e.date.slice(8)<=cut),name:MESES[+pm.slice(5)-1],partial:cut<31};
+}
+function delta(cur,prev,p){
+  if(!p.list.length||!prev) return '';
+  const d=(cur-prev)/Math.abs(prev)*100;
+  return (d>=0?'▲ ':'▼ ')+pct0(Math.abs(d))+' sobre '+p.name;
+}
+function dashboard(){
+  const all=monthEntries();
+  if(!all.length) return '<div class="empty"><h2>Nenhum lançamento em '+MESES[+S.month.slice(5)-1]+'</h2><p>Lance os gastos da empresa aqui. O que for de uma oferta entra em Ofertas e soma neste painel.</p><button class="btn primary" data-act="fin-new">Novo lançamento</button></div>';
+  const s=finStats(all), p=prevPeriod(), ps=finStats(p.list), days=[...new Set(all.map(e=>e.date))];
+  const roi=s.cost?pct0(s.profit/s.cost*100):'—', margin=s.rev?pct0(s.profit/s.rev*100):'—', avg=Math.round(s.profit/days.length);
+  let h='<div class="tiles six">'+
+    tile('Lucro líquido',signed(s.profit),pn(s.profit),delta(s.profit,ps.profit,p)||'Margem '+margin)+
+    tile('Faturamento',money(s.rev),'pos',delta(s.rev,ps.rev,p))+
+    tile('Gastos totais',money(s.cost),'neg',delta(s.cost,ps.cost,p)||(s.ads?'Anúncios '+money(s.ads):''))+
+    tile('ROAS',roas(s),'','Faturamento ÷ anúncios')+
+    tile('ROI',roi,'','Lucro ÷ gastos totais')+
+    tile('Lucro médio por dia',signed(avg),pn(avg),days.length+(days.length>1?' dias com lançamentos':' dia com lançamentos'))+'</div>';
+  h+=dailyChart(all)+coverage(all);
+  const rows=offerRows(all.filter(e=>e.offer));
+  if(rows) h+='<section class="box"><h2 class="group">Ofertas em '+MESES[+S.month.slice(5)-1]+'</h2>'+rows+'</section>';
+  return h;
+}
+function dailyChart(all){
+  const p=S.month.split('-').map(Number), last=new Date(p[0],p[1],0).getDate(), by={};
+  for(let d=1;d<=last;d++){ const key=S.month+'-'+String(d).padStart(2,'0'), l=all.filter(e=>e.date===key); by[d]=l.length?finStats(l):null; }
+  const vals=Object.values(by).filter(Boolean).map(x=>x.profit), up=Math.max(0,...vals), down=Math.max(0,...vals.map(v=>-v)), span=(up+down)||1, zero=down/span*100;
+  const withData=Object.keys(by).filter(d=>by[d]).map(Number), pick=by[S.dayPick]?+S.dayPick:withData[withData.length-1], x=by[pick];
+  const bars=Object.keys(by).map(Number).map(d=>{
+    const v=by[d], lab=d===1||d%7===1&&d<29||d===last?'<em>'+d+'</em>':'';
+    if(!v) return '<span class="dcol">'+lab+'</span>';
+    const hgt=Math.max(1.5,Math.abs(v.profit)/span*100), style=(v.profit>=0?'bottom:'+zero:'top:'+(100-zero))+'%;height:'+hgt+'%';
+    return '<button class="dcol'+(d===pick?' on':'')+'" data-act="day-pick" data-d="'+d+'" title="Dia '+d+': '+signed(v.profit)+'" aria-label="Dia '+d+', lucro '+signed(v.profit)+'"><i class="'+pn(v.profit)+'" style="'+style+'"></i>'+lab+'</button>';
+  }).join('');
+  return '<section class="box"><h2 class="group">Lucro da empresa por dia</h2><div class="dchart"><u style="bottom:'+zero+'%"></u>'+bars+'</div>'+
+    '<p class="hint dpick"><b>Dia '+pick+' de '+MES[p[1]-1]+':</b> faturamento '+money(x.rev)+' · gastos '+money(x.cost)+' · lucro '+signed(x.profit)+'</p></section>';
+}
+// Quanto do lucro das ofertas está pagando os gastos gerais da empresa.
+function coverage(all){
+  const gen=finStats(all.filter(e=>!e.offer)).cost; if(!gen) return '';
+  const op=finStats(all.filter(e=>e.offer)).profit, w=Math.min(100,Math.max(0,Math.round(op/gen*100))), rest=op-gen;
+  return '<section class="box"><h2 class="group">Cobertura dos gastos gerais</h2><div class="cat"><span>As ofertas lucraram '+money(op)+' e os gastos gerais foram '+money(gen)+'</span><span class="money '+pn(rest)+'">'+(rest<0?'Faltam '+money(-rest):'Sobram '+money(rest))+'</span>'+
+    '<div class="cbar pos"><i style="width:'+w+'%"></i></div></div></section>';
+}
+// Listas de Gastos e de Receitas: compactas, filtráveis, com total do que está filtrado.
+function ledger(kind){
+  const base=monthEntries().filter(e=>e.kind===kind), gasto=kind==='despesa';
+  const whereOk=e=>!S.fOffer||(S.fOffer==='_geral'?!e.offer:e.offer===S.fOffer);
+  const scoped=base.filter(whereOk), l=S.fCat?scoped.filter(e=>catLabel(e)===S.fCat):scoped;
+  const by={}; scoped.forEach(e=>{ const c=catLabel(e); by[c]=(by[c]||0)+e.cents; });
+  const cats=Object.keys(by).sort((a,b)=>by[b]-by[a]), total=sumFin(scoped);
+  if(S.fCat&&cats.indexOf(S.fCat)<0) cats.push(S.fCat);
+  let h='<div class="tools"><label>Onde <select data-f="fOffer">'+opt('','Tudo',S.fOffer)+opt('_geral','Geral da empresa',S.fOffer)+S.offers.map(o=>opt(o.id,o.name,S.fOffer)).join('')+'</select></label>'+
+    '<label>Categoria <select data-f="fCat">'+opt('','Todas',S.fCat)+cats.map(c=>opt(c,c,S.fCat)).join('')+'</select></label>'+
+    '<div class="stats"><span><b>'+money(sumFin(l))+'</b> em '+l.length+' lançamento'+(l.length===1?'':'s')+'</span></div></div>';
+  if(!base.length) return h+'<div class="empty"><h2>Nenhum'+(gasto?' gasto':'a receita')+' em '+MESES[+S.month.slice(5)-1]+'</h2><button class="btn primary" data-act="fin-new">Novo lançamento</button></div>';
+  if(total&&cats.length>1){
+    const max=by[cats[0]];
+    h+='<section class="box"><h2 class="group">Por categoria <span class="hint">clique para filtrar</span></h2>'+cats.filter(c=>by[c]).map(c=>'<button class="cat catb" data-act="cat-pick" data-v="'+esc(c)+'" aria-pressed="'+(S.fCat===c)+'"><span>'+esc(c)+'</span><span class="money">'+money(by[c])+' · '+Math.round(by[c]/total*100)+'%</span>'+
+      '<span class="cbar'+(gasto?'':' pos')+'"><i style="width:'+Math.max(2,Math.round(by[c]/max*100))+'%"></i></span></button>').join('')+'</section>';
+  }
+  if(!l.length) return h+'<div class="empty"><h2>Nada com esses filtros</h2><p>Mude os filtros acima para ver outros lançamentos.</p></div>';
+  const rows=l.slice().sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt-a.createdAt).map(e=>{
+    const p=e.date.split('-').map(Number), o=offerOf(e.offer);
+    return '<li><button data-act="fin-open" data-id="'+e.id+'"><span class="ld">'+p[2]+' '+MES[p[1]-1]+'</span><span class="lt"><b>'+esc(e.desc||e.cat)+'</b><small>'+esc((o?o.name:'Geral')+' · '+catLabel(e))+'</small></span><span class="money">'+money(e.cents)+'</span></button></li>';
+  }).join('');
+  return h+'<ul class="ledger">'+rows+'</ul>';
+}
+// Ofertas: só faturamento e gastos de cada oferta, da que dá mais lucro para a que dá menos.
+function offerRows(all){
+  const rows=S.offers.map(o=>({o,s:finStats(all.filter(e=>e.offer===o.id))}))
+    .filter(r=>r.o.status==='ativa'||r.s.rev||r.s.cost).sort((a,b)=>b.s.profit-a.s.profit||a.o.name.localeCompare(b.o.name,'pt-BR'));
+  if(!rows.length) return '';
+  const max=Math.max(...rows.map(r=>Math.abs(r.s.profit)))||1;
+  return rows.map(r=>{
+    const pct=r.s.profit?Math.max(2,Math.round(Math.abs(r.s.profit)/max*100)):0;
+    return '<button class="offer" data-act="offer-open" data-id="'+r.o.id+'" title="Lucro '+signed(r.s.profit)+'">'+
+      '<span class="offer-name">'+esc(r.o.name)+(r.o.status==='ativa'?'':' <span class="chip">'+esc(OSTATUS[r.o.status])+'</span>')+'</span>'+
+      '<span class="money '+pn(r.s.profit)+'">'+signed(r.s.profit)+'</span>'+
+      '<span class="cbar '+pn(r.s.profit)+'"><i style="width:'+pct+'%"></i></span>'+
+      '<span class="hint offer-sub">Faturamento '+money(r.s.rev)+' · Gastos '+money(r.s.cost)+' · ROAS '+roas(r.s)+'</span></button>';
+  }).join('');
+}
+function offersPage(){
+  const all=monthEntries().filter(e=>e.offer), s=finStats(all), rows=offerRows(all);
+  const h='<div class="tiles">'+tile('Faturamento',money(s.rev),'pos')+tile('Gastos das ofertas',money(s.cost),'neg')+tile('Lucro das ofertas',signed(s.profit),pn(s.profit))+tile('ROAS geral',roas(s))+'</div>'+
+    '<div class="tools"><button class="btn sm" data-act="offer-new">Nova oferta</button></div>';
+  if(!rows) return h+'<div class="empty"><h2>Nenhuma oferta neste mês</h2><p>Cadastre uma oferta para acompanhar o faturamento e os gastos dela separadamente.</p></div>';
+  return h+'<section class="box"><h2 class="group">Resultado por oferta em '+MESES[+S.month.slice(5)-1]+'</h2>'+rows+'</section>';
+}
+function offerPage(){
+  const o=offerOf(S.offerId), all=monthEntries().filter(e=>e.offer===o.id), s=finStats(all);
+  let h='<div class="offer-head"><button class="btn ghost sm" data-act="offer-back">← Ofertas</button><h2>'+esc(o.name)+'</h2>'+(o.status==='ativa'?'':'<span class="chip">'+esc(OSTATUS[o.status])+'</span>')+
+    '<button class="btn ghost sm" data-act="offer-edit">Editar oferta</button></div>';
+  h+='<div class="tiles">'+tile('Faturamento',money(s.rev),'pos')+tile('Anúncios',money(s.ads),'neg','ROAS '+roas(s))+tile('Outros gastos',money(s.other),'neg')+tile('Lucro',signed(s.profit),pn(s.profit))+'</div>';
+  if(!all.length) return h+'<div class="empty"><h2>Nenhum lançamento em '+MESES[+S.month.slice(5)-1]+'</h2><p>Lance aqui o faturamento e o gasto com anúncios desta oferta.</p><button class="btn primary" data-act="fin-new">Novo lançamento</button></div>';
+  const days=[...new Set(all.map(e=>e.date))].sort().reverse();
+  h+='<section class="box"><h2 class="group">Lucro por dia</h2><div class="tscroll"><table class="days"><thead><tr><th>Dia</th><th>Faturamento</th><th>Gastos</th><th>Lucro</th></tr></thead><tbody>'+days.map(d=>{
+    const x=finStats(all.filter(e=>e.date===d)), p=d.split('-').map(Number);
+    return '<tr><td>'+p[2]+' '+MES[p[1]-1]+'</td><td>'+money(x.rev)+'</td><td>'+money(x.cost)+'</td><td class="'+pn(x.profit)+'">'+signed(x.profit)+'</td></tr>';
+  }).join('')+'</tbody></table></div></section>';
+  return h+entryList(all,false);
 }
 
 function openEntry(id){
   if(id){ const e=S.fin.find(x=>x.id===id); if(!e) return; S.entry=clone(e); S.entryNew=false; }
   else{
-    const td=ymd(new Date());
-    S.entry={id:uid('f'),kind:S.fKind==='receita'?'receita':'despesa',cents:0,date:td.slice(0,7)===S.month?td:S.month+'-01',desc:'',cat:'',who:'',notes:'',createdAt:Date.now(),createdBy:S.me};
+    const td=ymd(new Date()), inOffer=S.finView==='ofertas'&&!S.offerErr;
+    const first=S.offers.find(o=>o.status==='ativa');
+    S.entry={id:uid('f'),kind:!inOffer&&S.genView==='receitas'?'receita':'despesa',cents:0,date:td.slice(0,7)===S.month?td:S.month+'-01',desc:'',cat:'',who:'',notes:'',
+      offer:inOffer?(S.offerId||(first?first.id:'')):(S.genView!=='painel'&&S.fOffer!=='_geral'?S.fOffer:''),createdAt:Date.now(),createdBy:S.me};
     S.entryNew=true;
   }
   S.entryDel=false; renderEntry(); $('#e-amount').focus();
 }
 function readEntry(){
   const e=S.entry; if(!e||!$('#finForm')) return;
-  e.amt=$('#e-amount').value; e.date=$('#e-date').value; e.desc=$('#e-desc').value; e.cat=$('#e-cat').value; e.who=$('#e-who').value; e.notes=$('#e-notes').value;
+  e.amt=$('#e-amount').value; e.date=$('#e-date').value; e.desc=$('#e-desc').value; e.who=$('#e-who').value; e.notes=$('#e-notes').value;
+  e.offer=$('#e-offer').value; const c=$('#e-cat'); if(c) e.cat=c.value;
 }
+// Em oferta há só duas categorias de gasto (Anúncios e Outros); o faturamento não pede categoria.
+const offerCat=e=>e.kind==='receita'?'Faturamento':/^outros/i.test(e.cat)?'Outros':'Anúncios';
 function renderEntry(){
   const e=S.entry, el=$('#fin'); el.hidden=false;
-  const sugg=[...new Set(CATS[e.kind].concat(S.fin.filter(x=>x.kind===e.kind).map(x=>x.cat)))];
+  const sugg=[...new Set(CATS[e.kind].concat(S.fin.filter(x=>x.kind===e.kind&&!x.offer).map(x=>x.cat)))];
   const amt=e.amt!=null?e.amt:(e.cents?centsTxt(e.cents):'');
+  const list=S.offers.filter(o=>o.status!=='encerrada'||o.id===e.offer);
+  const cat=!e.offer?'<label class="fld">Categoria<input type="text" id="e-cat" list="e-cats" maxlength="60" autocomplete="off" placeholder="Escolha ou digite" value="'+esc(e.cat)+'"></label>'
+    :e.kind==='despesa'?'<label class="fld">Categoria<select id="e-cat">'+opt('Anúncios','Anúncios',offerCat(e))+opt('Outros','Outros',offerCat(e))+'</select></label>':'';
   el.innerHTML='<div class="scrim"></div><div class="dialog" role="dialog" aria-modal="true" aria-label="Lançamento">'+
     '<h2>'+(S.entryNew?'Novo lançamento':'Lançamento')+'</h2>'+
     '<form id="finForm" class="fin-form">'+
     '<div class="seg">'+[['despesa','Despesa'],['receita','Receita']].map(k=>'<button type="button" data-act="fin-kind" data-v="'+k[0]+'" aria-pressed="'+(e.kind===k[0])+'">'+k[1]+'</button>').join('')+'</div>'+
+    '<label class="fld">Onde entra<select id="e-offer">'+opt('','Geral da empresa',e.offer)+list.map(o=>opt(o.id,'Oferta '+o.name,e.offer)).join('')+'</select></label>'+
     '<div class="fields"><label class="fld">Valor (R$)<input type="text" id="e-amount" inputmode="decimal" autocomplete="off" placeholder="0,00" value="'+esc(amt)+'"></label>'+
     '<label class="fld">Data<input type="date" id="e-date" value="'+esc(e.date)+'"></label></div>'+
-    '<label class="fld">Descrição<input type="text" id="e-desc" maxlength="160" autocomplete="off" placeholder="'+(e.kind==='despesa'?'Ex.: campanha de outubro no Instagram':'Ex.: vendas do lançamento')+'" value="'+esc(e.desc)+'"></label>'+
-    '<div class="fields"><label class="fld">Categoria<input type="text" id="e-cat" list="e-cats" maxlength="60" autocomplete="off" placeholder="Escolha ou digite" value="'+esc(e.cat)+'"></label>'+
-    '<label class="fld">'+(e.kind==='despesa'?'Quem pagou':'Quem recebeu')+'<select id="e-who">'+opt('','Conta da empresa',e.who)+S.team.map(m=>opt(m.id,m.name,e.who)).join('')+'</select></label></div>'+
+    '<label class="fld">Descrição<input type="text" id="e-desc" maxlength="160" autocomplete="off" placeholder="'+(e.kind==='despesa'?'Ex.: assinatura da ferramenta de e-mail':'Ex.: faturamento do dia')+'" value="'+esc(e.desc)+'"></label>'+
+    '<div class="fields">'+cat+'<label class="fld">'+(e.kind==='despesa'?'Quem pagou':'Quem recebeu')+'<select id="e-who">'+opt('','Conta da empresa',e.who)+S.team.map(m=>opt(m.id,m.name,e.who)).join('')+'</select></label></div>'+
     '<datalist id="e-cats">'+sugg.map(c=>'<option value="'+esc(c)+'">').join('')+'</datalist>'+
     '<label class="fld">Observações<textarea id="e-notes" placeholder="Forma de pagamento, nota fiscal, detalhes.">'+esc(e.notes)+'</textarea></label>'+
     '<div class="panel-foot">'+(S.entryDel
@@ -732,9 +884,45 @@ function submitEntry(){
   const e=S.entry, c=parseMoney(e.amt);
   if(!(c>0)){ toast('Digite um valor maior que zero, por exemplo 150,00.'); $('#e-amount').focus(); return; }
   if(!e.date){ toast('Escolha a data.'); $('#e-date').focus(); return; }
-  const n=finNorm(Object.assign({},e,{cents:c,cat:e.cat.trim(),desc:e.desc.trim(),notes:e.notes.trim()}));
+  const n=finNorm(Object.assign({},e,{cents:c,cat:e.offer?offerCat(e):e.cat.trim(),desc:e.desc.trim(),notes:e.notes.trim()}));
   closeEntry(); saveEntry(n);
   if(n.date.slice(0,7)!==S.month) toast('Salvo em '+monthLabel(n.date.slice(0,7)).toLowerCase()+'.');
+}
+
+/* ---------- cadastro de ofertas ---------- */
+const OSTATUS={ativa:'Ativa',pausada:'Pausada',encerrada:'Encerrada'};
+const offerRow=o=>({id:o.id,name:o.name,status:o.status,created_at:o.createdAt,created_by:o.createdBy});
+const offerFrom=r=>({id:r.id,name:r.name||'',status:OSTATUS[r.status]?r.status:'ativa',createdAt:Number(r.created_at)||0,createdBy:r.created_by||''});
+function saveOffer(o){
+  const i=S.offers.findIndex(x=>x.id===o.id); if(i>=0) S.offers[i]=o; else S.offers.push(o);
+  if(!db){ ls.set('pp_offers',JSON.stringify(S.offers)); render(); return; }
+  render(); quickWrite(db.from('offers').upsert(offerRow(o)));
+}
+function deleteOffer(id){
+  S.offers=S.offers.filter(x=>x.id!==id);
+  if(!db){ ls.set('pp_offers',JSON.stringify(S.offers)); render(); return; }
+  render(); quickWrite(db.from('offers').delete().eq('id',id));
+}
+function openOffer(id){
+  const o=id?offerOf(id):null;
+  S.offerForm=o?clone(o):{id:uid('o'),name:'',status:'ativa',createdAt:Date.now(),createdBy:S.me};
+  S.offerNew=!o; renderOfferForm(); $('#o-name').focus();
+}
+function renderOfferForm(){
+  const o=S.offerForm, el=$('#fin'), used=S.fin.some(e=>e.offer===o.id); el.hidden=false;
+  el.innerHTML='<div class="scrim"></div><div class="dialog" role="dialog" aria-modal="true" aria-label="Oferta"><h2>'+(S.offerNew?'Nova oferta':'Editar oferta')+'</h2>'+
+    '<form id="offerForm" class="fin-form"><label class="fld">Nome<input type="text" id="o-name" maxlength="60" autocomplete="off" placeholder="Ex.: SEDUC" value="'+esc(o.name)+'"></label>'+
+    '<label class="fld">Situação<select id="o-status">'+Object.keys(OSTATUS).map(k=>opt(k,OSTATUS[k],o.status)).join('')+'</select></label>'+
+    '<p class="hint">Oferta encerrada sai da lista, mas os números dela continuam no mês em que aconteceram.</p>'+
+    '<div class="panel-foot"><button type="submit" class="btn primary">Salvar</button><button type="button" class="btn ghost" data-act="offer-cancel">Cancelar</button>'+
+    (S.offerNew||used?'':'<button type="button" class="btn danger" data-act="offer-del">Excluir</button>')+'</div></form></div>';
+}
+function closeOffer(){ S.offerForm=null; $('#fin').hidden=true; $('#fin').innerHTML=''; }
+function submitOffer(){
+  const name=$('#o-name').value.trim();
+  if(!name){ toast('Digite o nome da oferta.'); $('#o-name').focus(); return; }
+  const o=Object.assign({},S.offerForm,{name,status:$('#o-status').value});
+  closeOffer(); saveOffer(o);
 }
 
 /* ---------- modelos ---------- */
@@ -815,7 +1003,17 @@ document.addEventListener('click',e=>{
   if(a==='tab'){ S.tab=b.dataset.v; ls.set('pp_tab',S.tab); render(); }
   else if(a==='period'){ S.period=b.dataset.v; ls.set('pp_period',S.period); render(); }
   else if(a==='section'){ S.section=b.dataset.v; ls.set('pp_section',S.section); render(); }
-  else if(a==='month'){ S.month=addMonths(S.month,+b.dataset.d); S.fCat=''; render(); }
+  else if(a==='month'){ S.month=addMonths(S.month,+b.dataset.d); S.fCat=''; S.dayPick=''; render(); }
+  else if(a==='finview'){ S.finView=b.dataset.v; S.offerId=''; S.fCat=''; ls.set('pp_finview',S.finView); render(); }
+  else if(a==='offer-open'){ S.offerId=id; S.finView='ofertas'; ls.set('pp_finview','ofertas'); render(); }
+  else if(a==='genview'){ S.genView=b.dataset.v; S.fCat=''; S.fOffer=''; ls.set('pp_genview',S.genView); render(); }
+  else if(a==='day-pick'){ S.dayPick=b.dataset.d; render(); }
+  else if(a==='cat-pick'){ S.fCat=S.fCat===b.dataset.v?'':b.dataset.v; render(); }
+  else if(a==='offer-back'){ S.offerId=''; render(); }
+  else if(a==='offer-new') openOffer(null);
+  else if(a==='offer-edit') openOffer(S.offerId);
+  else if(a==='offer-cancel') closeOffer();
+  else if(a==='offer-del'){ const oid=S.offerForm.id; closeOffer(); S.offerId=''; deleteOffer(oid); }
   else if(a==='fin-new') openEntry(null);
   else if(a==='fin-open') openEntry(id);
   else if(a==='fin-kind'){ readEntry(); S.entry.kind=b.dataset.v; renderEntry(); }
@@ -878,6 +1076,7 @@ document.addEventListener('click',e=>{
 document.addEventListener('change',e=>{
   const t=e.target;
   if(t.dataset.f){ S[t.dataset.f]=t.value; render(); return; }
+  if(t.id==='e-offer'){ readEntry(); renderEntry(); return; }
   if(t.dataset.step){
     const task=byId(t.dataset.id); if(!task) return;
     const n=clone(task), s=n.steps.find(s=>s.id===t.dataset.step); if(!s) return;
@@ -901,7 +1100,7 @@ document.addEventListener('input',e=>{
   else if(t.dataset.k&&(t.id==='f-title'||t.id==='f-desc')){ S.draft[t.dataset.k]=t.value; touch(false); }
 });
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){ if(S.tplOpen&&!S.draft){ S.tplOpen=false; render(); } else if(S.entry) closeEntry(); else if(S.draft) closeSheet(); else if(S.teamOpen){ S.teamOpen=false; render(); } return; }
+  if(e.key==='Escape'){ if(S.tplOpen&&!S.draft){ S.tplOpen=false; render(); } else if(S.offerForm) closeOffer(); else if(S.entry) closeEntry(); else if(S.draft) closeSheet(); else if(S.teamOpen){ S.teamOpen=false; render(); } return; }
   if(e.key!=='Enter') return;
   const t=e.target;
   if(t.id==='f-rename'){ e.preventDefault(); saveRename(S.editMember); }
@@ -927,6 +1126,7 @@ document.addEventListener('submit',e=>{
     return;
   }
   if(e.target.id==='finForm'){ e.preventDefault(); submitEntry(); return; }
+  if(e.target.id==='offerForm'){ e.preventDefault(); submitOffer(); return; }
   if(e.target.id!=='addMember') return;
   e.preventDefault();
   const inp=$('#f-member'), name=inp.value.trim(); if(!name) return;

@@ -86,3 +86,27 @@ do $$ begin
   alter publication supabase_realtime add table public.templates;
 exception when duplicate_object then null;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Ofertas (acrescentado em 31/10/2026). Pode rodar este trecho sozinho.
+-- finance.offer_id vazio = lançamento geral da empresa.
+create table if not exists public.offers (
+  id          text primary key,
+  name        text not null default '',
+  status      text not null default 'ativa',   -- 'ativa' | 'pausada' | 'encerrada'
+  created_at  bigint not null default 0,
+  created_by  text not null default ''
+);
+
+alter table public.finance add column if not exists offer_id text not null default '';
+
+alter table public.offers enable row level security;
+
+drop policy if exists "logados leem e gravam ofertas" on public.offers;
+create policy "logados leem e gravam ofertas" on public.offers
+  for all to authenticated using (true) with check (true);
+
+do $$ begin
+  alter publication supabase_realtime add table public.offers;
+exception when duplicate_object then null;
+end $$;

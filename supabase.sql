@@ -110,3 +110,47 @@ do $$ begin
   alter publication supabase_realtime add table public.offers;
 exception when duplicate_object then null;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Finanças pessoais (acrescentado em 03/11/2026). Pode rodar este trecho sozinho.
+-- Entradas e saídas de cada pessoa, separadas das contas da empresa. Valores em centavos.
+-- PRIVADO: cada linha pertence a um login (user_id) e o banco só deixa esse login ler e mexer nela.
+-- Diferente das outras tabelas, aqui nem os outros usuários logados enxergam nada.
+create table if not exists public.personal_finance (
+  id            text primary key,
+  user_id       uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  kind          text not null default 'saida',     -- 'saida' | 'receita'
+  amount_cents  bigint not null default 0,
+  date          date not null default current_date,
+  descr         text not null default '',
+  type          text not null default '',          -- saída: 'rapida' | 'lazer' | 'contas' | 'transporte' | 'saude' | 'investimento' | 'outros'
+  items         jsonb not null default '[]',       -- [{text, cents}]
+  created_at    bigint not null default 0,
+  created_by    text not null default ''
+);
+
+create index if not exists personal_finance_user_id_idx on public.personal_finance (user_id);
+
+alter table public.personal_finance enable row level security;
+revoke all on public.personal_finance from anon;
+
+drop policy if exists "dono le financas pessoais" on public.personal_finance;
+create policy "dono le financas pessoais" on public.personal_finance
+  for select to authenticated using (user_id = (select auth.uid()));
+
+drop policy if exists "dono cria financas pessoais" on public.personal_finance;
+create policy "dono cria financas pessoais" on public.personal_finance
+  for insert to authenticated with check (user_id = (select auth.uid()));
+
+drop policy if exists "dono altera financas pessoais" on public.personal_finance;
+create policy "dono altera financas pessoais" on public.personal_finance
+  for update to authenticated using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+
+drop policy if exists "dono exclui financas pessoais" on public.personal_finance;
+create policy "dono exclui financas pessoais" on public.personal_finance
+  for delete to authenticated using (user_id = (select auth.uid()));
+
+do $$ begin
+  alter publication supabase_realtime add table public.personal_finance;
+exception when duplicate_object then null;
+end $$;

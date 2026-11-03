@@ -230,6 +230,11 @@ button.dcol:hover,.dcol.on{background:var(--sunken)}
 .dialog form.fin-form{flex-direction:column;gap:12px}
 .fin-form .seg{align-self:flex-start}
 .fin-form .panel-foot{padding-top:4px}
+.per-seg{flex-wrap:wrap;max-width:100%}
+.items{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.items li{display:flex;gap:6px;align-items:center}
+.items input{flex:1 1 0;min-width:0}
+.items input.iv{flex:0 0 120px}
 @media (max-width:760px){
   .tiles,.tiles.six{grid-template-columns:repeat(2,minmax(0,1fr))}
   .tile b{font-size:18px}
@@ -239,6 +244,8 @@ button.dcol:hover,.dcol.on{background:var(--sunken)}
   .stats{margin-left:0;width:100%}
   .fields{grid-template-columns:minmax(0,1fr)}
   .steps{padding-left:38px}
+  .per-seg button{padding:6px 10px}
+  .items input.iv{flex-basis:96px}
 }
 @media (prefers-reduced-motion:no-preference){.card,.row{transition:box-shadow .15s}}
 </style>
@@ -268,7 +275,8 @@ const ls={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k
 function ymdNow(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 const S={remote:[],tasks:[],team:[],me:ls.get('pp_me')||'',tab:ls.get('pp_tab')||'empresa',view:ls.get('pp_view')||'quadro',
   period:['semana','hoje'].indexOf(ls.get('pp_period'))>=0?ls.get('pp_period'):'tudo',person:'',fPrio:'',fWho:'',fArea:'',expanded:new Set(),ready:false,teamReady:false,local:false,canWrite:true,draft:null,isNew:false,teamOpen:false,
-  section:ls.get("pp_section")==="financas"?"financas":"tarefas",fin:[],finErr:false,month:ymdNow().slice(0,7),fCat:"",fOffer:"",dayPick:"",genView:["gastos","receitas"].indexOf(ls.get("pp_genview"))>=0?ls.get("pp_genview"):"painel",entry:null,finView:ls.get("pp_finview")==="ofertas"?"ofertas":"geral",offers:[],offerErr:false,offerId:"",offerForm:null,tpl:[],tplErr:false,tplMode:false,tplOpen:false,tplDel:""};
+  section:ls.get("pp_section")==="financas"?"financas":"tarefas",fin:[],finErr:false,month:ymdNow().slice(0,7),fCat:"",fOffer:"",dayPick:"",genView:["gastos","receitas"].indexOf(ls.get("pp_genview"))>=0?ls.get("pp_genview"):"painel",entry:null,finView:["ofertas","pessoal"].indexOf(ls.get("pp_finview"))>=0?ls.get("pp_finview"):"geral",
+  finPer:["hoje","ontem","7d"].indexOf(ls.get("pp_finper"))>=0?ls.get("pp_finper"):"mes",pfin:[],pfinErr:false,pentry:null,email:"",pType:"",offers:[],offerErr:false,offerId:"",offerForm:null,tpl:[],tplErr:false,tplMode:false,tplOpen:false,tplDel:""};
 let db=null;
 const over={},pending={},inflight={};
 
@@ -338,6 +346,7 @@ async function boot(){
     try{ S.fin=(JSON.parse(ls.get('pp_fin')||'[]')).map(finNorm); }catch(e){ S.fin=[]; }
     try{ S.tpl=(JSON.parse(ls.get('pp_tpl')||'[]')).map(tplFrom); }catch(e){ S.tpl=[]; }
     try{ S.offers=(JSON.parse(ls.get('pp_offers')||'[]')).map(offerFrom); }catch(e){ S.offers=[]; }
+    try{ S.pfin=(JSON.parse(ls.get('pp_pfin')||'[]')).map(pfNorm); }catch(e){ S.pfin=[]; }
     S.ready=S.teamReady=true; merge(); render(); return;
   }
   db=window.supabase.createClient(cfg.url,cfg.key);
@@ -355,14 +364,16 @@ async function fetchAll(){
   try{
     // Finanças e modelos vêm à parte: se a tabela ainda não existir no banco, as tarefas continuam funcionando.
     const soft=q=>Promise.resolve(q).catch(e=>({error:e}));
-    const [a,b,c,m,o]=await Promise.all([db.from('tasks').select('*'),db.from('members').select('*').order('created_at'),
-      soft(db.from('finance').select('*')),soft(db.from('templates').select('*')),soft(db.from('offers').select('*').order('created_at'))]);
+    const [a,b,c,m,o,pf]=await Promise.all([db.from('tasks').select('*'),db.from('members').select('*').order('created_at'),
+      soft(db.from('finance').select('*')),soft(db.from('templates').select('*')),soft(db.from('offers').select('*').order('created_at')),
+      soft(db.from('personal_finance').select('*'))]);
     if(a.error||b.error) throw (a.error||b.error);
     if(w===wrote&&!busyW){
       S.remote=a.data.map(fromRow); S.team=b.data.map(m=>({id:m.id,name:m.name}));
       S.finErr=!!c.error; if(!c.error) S.fin=c.data.map(finFrom);
       S.tplErr=!!m.error; if(!m.error) S.tpl=m.data.map(tplFrom);
       S.offerErr=!!o.error; if(!o.error) S.offers=o.data.map(offerFrom);
+      S.pfinErr=!!pf.error; if(!pf.error) S.pfin=pf.data.map(pfFrom);
       S.ready=S.teamReady=true; merge(); render();
     }else again=true;
   }catch(e){ toast('Não foi possível carregar as tarefas. Confira a internet e recarregue a página.'); }
@@ -371,13 +382,15 @@ async function fetchAll(){
 }
 function start(){
   S.needLogin=false; $('#login').hidden=true; $('#login').innerHTML=''; render();
+  db.auth.getUser().then(r=>{ S.email=(r.data&&r.data.user&&r.data.user.email)||''; render(); },()=>{});
   const soon=refetchSoon;
   fetchAll();
   db.channel('pp').on('postgres_changes',{event:'*',schema:'public',table:'tasks'},soon)
     .on('postgres_changes',{event:'*',schema:'public',table:'members'},soon)
     .on('postgres_changes',{event:'*',schema:'public',table:'finance'},soon)
     .on('postgres_changes',{event:'*',schema:'public',table:'templates'},soon)
-    .on('postgres_changes',{event:'*',schema:'public',table:'offers'},soon).subscribe();
+    .on('postgres_changes',{event:'*',schema:'public',table:'offers'},soon)
+    .on('postgres_changes',{event:'*',schema:'public',table:'personal_finance'},soon).subscribe();
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden) soon(); });
   window.addEventListener('online',soon);
 }
@@ -467,7 +480,7 @@ function renderBar(){
   $('#bar').innerHTML='<div class="brand">Passo <i>a</i> Passo</div>'+
     seg('section',S.section,[['tarefas','Tarefas'],['financas','Finanças']])+
     (fin
-      ?seg('finview',S.finView,[['geral','Geral'],['ofertas','Ofertas']])+'<div class="seg month"><button data-act="month" data-d="-1" aria-label="Mês anterior">‹</button><span>'+monthLabel(S.month)+'</span><button data-act="month" data-d="1" aria-label="Próximo mês">›</button></div>'
+      ?seg('finview',S.finView,[['geral','Geral'],['ofertas','Ofertas'],['pessoal','Pessoal']])
       :seg('tab',S.tab,[['empresa','Empresa'],['pessoal','Pessoal']])+
        seg('period',S.period,[['tudo','Tudo'],['semana','Semana'],['hoje','Hoje']]))+
     '<div class="grow"></div>'+
@@ -699,7 +712,31 @@ const signed=c=>(c>0?'+ ':c<0?'− ':'')+money(Math.abs(c));
 const pn=c=>c<0?'neg':'pos';
 function roas(s){ return s.ads?(s.rev/s.ads).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'x':'—'; }
 const tile=(l,v,cls,sub)=>'<div class="tile"><span>'+l+'</span><b'+(cls?' class="'+cls+'"':'')+'>'+v+'</b>'+(sub?'<small>'+sub+'</small>':'')+'</div>';
-const monthEntries=()=>S.fin.filter(e=>e.date.slice(0,7)===S.month);
+// Período escolhido em Finanças (S.finPer): hoje, ontem, últimos 7 dias ou um mês (S.month).
+// Devolve o intervalo de datas, o texto para frases ("hoje", "em novembro") e o período anterior para comparação.
+function finRange(){
+  const td=ymdNow(), y=addDays(td,-1);
+  if(S.finPer==='hoje') return {from:td,to:td,txt:'hoje',prev:{from:y,to:y,name:'ontem'}};
+  if(S.finPer==='ontem') return {from:y,to:y,txt:'ontem',prev:{from:addDays(td,-2),to:addDays(td,-2),name:'anteontem'}};
+  if(S.finPer==='7d') return {from:addDays(td,-6),to:td,txt:'nos últimos 7 dias',prev:{from:addDays(td,-13),to:addDays(td,-7),name:'os 7 dias anteriores'}};
+  // Mês: compara com o mês anterior no mesmo período; no mês corrente, só até o mesmo dia, para não comparar mês parcial com mês inteiro.
+  const p=S.month.split('-').map(Number), last=String(new Date(p[0],p[1],0).getDate()), pm=addMonths(S.month,-1);
+  const pp=pm.split('-').map(Number), plast=new Date(pp[0],pp[1],0).getDate(), cut=td.slice(0,7)===S.month?Math.min(+td.slice(8),plast):plast;
+  return {from:S.month+'-01',to:S.month+'-'+last,txt:'em '+MESES[p[1]-1],month:true,
+    prev:{from:pm+'-01',to:pm+'-'+String(cut).padStart(2,'0'),name:MESES[pp[1]-1]}};
+}
+const inRange=(d,r)=>d>=r.from&&d<=r.to;
+const rangeDays=r=>{ const out=[]; for(let d=r.from;d<=r.to;d=addDays(d,1)) out.push(d); return out; };
+const monthEntries=()=>{ const r=finRange(); return S.fin.filter(e=>inRange(e.date,r)); };
+const dayTxt=d=>{ const p=d.split('-').map(Number); return p[2]+' de '+MES[p[1]-1]; };
+// Barra de períodos no topo de Finanças. No modo mês, as setas andam para meses anteriores e seguintes.
+function periodBar(){
+  const cur=ymdNow().slice(0,7), prev=addMonths(cur,-1), on=S.finPer==='mes'?(S.month===cur?'mes':S.month===prev?'mespas':''):S.finPer;
+  const b=(v,l)=>'<button data-act="finper" data-v="'+v+'" aria-pressed="'+(on===v)+'">'+l+'</button>';
+  return '<div class="tools per"><div class="seg per-seg">'+b('hoje','Hoje')+b('ontem','Ontem')+b('7d','Últimos 7 dias')+b('mes','Este mês')+b('mespas','Mês passado')+'</div>'+
+    (S.finPer==='mes'?'<div class="seg month"><button data-act="month" data-d="-1" aria-label="Mês anterior">‹</button><span>'+monthLabel(S.month)+'</span><button data-act="month" data-d="1" aria-label="Próximo mês">›</button></div>'
+      :'<span class="hint">'+(S.finPer==='7d'?dayTxt(addDays(ymdNow(),-6))+' até hoje, '+dayTxt(ymdNow()):dayTxt(finRange().from))+'</span>')+'</div>';
+}
 const offerOf=id=>S.offers.find(o=>o.id===id);
 function entryList(l,showOffer){
   const items=l.slice().sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt-a.createdAt);
@@ -723,7 +760,9 @@ function renderFin(){
   if(S.finErr){ app.innerHTML='<p class="notice">A parte de finanças ainda não foi ativada no banco de dados. É preciso rodar o trecho de finanças do arquivo supabase.sql no Supabase (SQL Editor).</p>'; return; }
   let h='';
   if(S.local) h+='<p class="notice">Modo local: o banco de dados ainda não foi configurado (config.js), então os lançamentos ficam só neste navegador.</p>';
-  if(S.finView==='ofertas') h+=S.offerErr?'<p class="notice">As ofertas ainda não foram ativadas no banco de dados. É preciso rodar o trecho de ofertas do arquivo supabase.sql no Supabase (SQL Editor).</p>':(offerOf(S.offerId)?offerPage():offersPage());
+  h+=periodBar();
+  if(S.finView==='pessoal') h+=S.pfinErr?'<p class="notice">As finanças pessoais ainda não foram ativadas no banco de dados. É preciso rodar o trecho "Finanças pessoais" do arquivo supabase.sql no Supabase (SQL Editor).</p>':personalPage();
+  else if(S.finView==='ofertas') h+=S.offerErr?'<p class="notice">As ofertas ainda não foram ativadas no banco de dados. É preciso rodar o trecho de ofertas do arquivo supabase.sql no Supabase (SQL Editor).</p>':(offerOf(S.offerId)?offerPage():offersPage());
   else h+=generalPage();
   app.innerHTML=h;
 }
@@ -735,10 +774,9 @@ function generalPage(){
   const h='<div class="seg gen-tabs">'+tab('painel','Painel')+tab('gastos','Gastos')+tab('receitas','Receitas')+'</div>';
   return h+(S.genView==='painel'?dashboard():ledger(S.genView==='gastos'?'despesa':'receita'));
 }
-// Compara com o mês anterior no mesmo período: no mês corrente, só até o mesmo dia, para não comparar mês parcial com mês inteiro.
 function prevPeriod(){
-  const pm=addMonths(S.month,-1), today=ymdNow(), cut=today.slice(0,7)===S.month?+today.slice(8):31;
-  return {list:S.fin.filter(e=>e.date.slice(0,7)===pm&&+e.date.slice(8)<=cut),name:MESES[+pm.slice(5)-1],partial:cut<31};
+  const p=finRange().prev;
+  return {list:S.fin.filter(e=>inRange(e.date,p)),name:p.name};
 }
 function delta(cur,prev,p){
   if(!p.list.length||!prev) return '';
@@ -746,8 +784,8 @@ function delta(cur,prev,p){
   return (d>=0?'▲ ':'▼ ')+pct0(Math.abs(d))+' sobre '+p.name;
 }
 function dashboard(){
-  const all=monthEntries();
-  if(!all.length) return '<div class="empty"><h2>Nenhum lançamento em '+MESES[+S.month.slice(5)-1]+'</h2><p>Lance os gastos da empresa aqui. O que for de uma oferta entra em Ofertas e soma neste painel.</p><button class="btn primary" data-act="fin-new">Novo lançamento</button></div>';
+  const all=monthEntries(), r=finRange();
+  if(!all.length) return '<div class="empty"><h2>Nenhum lançamento '+r.txt+'</h2><p>Lance os gastos da empresa aqui. O que for de uma oferta entra em Ofertas e soma neste painel.</p><button class="btn primary" data-act="fin-new">Novo lançamento</button></div>';
   const s=finStats(all), p=prevPeriod(), ps=finStats(p.list), days=[...new Set(all.map(e=>e.date))];
   const roi=s.cost?pct0(s.profit/s.cost*100):'—', margin=s.rev?pct0(s.profit/s.rev*100):'—', avg=Math.round(s.profit/days.length);
   let h='<div class="tiles six">'+
@@ -759,22 +797,23 @@ function dashboard(){
     tile('Lucro médio por dia',signed(avg),pn(avg),days.length+(days.length>1?' dias com lançamentos':' dia com lançamentos'))+'</div>';
   h+=dailyChart(all)+coverage(all);
   const rows=offerRows(all.filter(e=>e.offer));
-  if(rows) h+='<section class="box"><h2 class="group">Ofertas em '+MESES[+S.month.slice(5)-1]+'</h2>'+rows+'</section>';
+  if(rows) h+='<section class="box"><h2 class="group">Ofertas '+r.txt+'</h2>'+rows+'</section>';
   return h;
 }
+// Gráfico de lucro por dia do período. Em Hoje e Ontem (um dia só) não aparece: os quadros já dizem tudo.
 function dailyChart(all){
-  const p=S.month.split('-').map(Number), last=new Date(p[0],p[1],0).getDate(), by={};
-  for(let d=1;d<=last;d++){ const key=S.month+'-'+String(d).padStart(2,'0'), l=all.filter(e=>e.date===key); by[d]=l.length?finStats(l):null; }
-  const vals=Object.values(by).filter(Boolean).map(x=>x.profit), up=Math.max(0,...vals), down=Math.max(0,...vals.map(v=>-v)), span=(up+down)||1, zero=down/span*100;
-  const withData=Object.keys(by).filter(d=>by[d]).map(Number), pick=by[S.dayPick]?+S.dayPick:withData[withData.length-1], x=by[pick];
-  const bars=Object.keys(by).map(Number).map(d=>{
-    const v=by[d], lab=d===1||d%7===1&&d<29||d===last?'<em>'+d+'</em>':'';
+  const r=finRange(), keys=rangeDays(r); if(keys.length<2) return '';
+  const by={}; keys.forEach(k=>{ const l=all.filter(e=>e.date===k); by[k]=l.length?finStats(l):null; });
+  const vals=keys.filter(k=>by[k]).map(k=>by[k].profit), up=Math.max(0,...vals), down=Math.max(0,...vals.map(v=>-v)), span=(up+down)||1, zero=down/span*100;
+  const withData=keys.filter(k=>by[k]), pick=by[S.dayPick]?S.dayPick:withData[withData.length-1], x=by[pick];
+  const bars=keys.map((k,i)=>{
+    const v=by[k], d=+k.slice(8), lab=!r.month||d===1||d%7===1&&d<29||i===keys.length-1?'<em>'+d+'</em>':'';
     if(!v) return '<span class="dcol">'+lab+'</span>';
     const hgt=Math.max(1.5,Math.abs(v.profit)/span*100), style=(v.profit>=0?'bottom:'+zero:'top:'+(100-zero))+'%;height:'+hgt+'%';
-    return '<button class="dcol'+(d===pick?' on':'')+'" data-act="day-pick" data-d="'+d+'" title="Dia '+d+': '+signed(v.profit)+'" aria-label="Dia '+d+', lucro '+signed(v.profit)+'"><i class="'+pn(v.profit)+'" style="'+style+'"></i>'+lab+'</button>';
+    return '<button class="dcol'+(k===pick?' on':'')+'" data-act="day-pick" data-d="'+k+'" title="'+dayTxt(k)+': '+signed(v.profit)+'" aria-label="'+dayTxt(k)+', lucro '+signed(v.profit)+'"><i class="'+pn(v.profit)+'" style="'+style+'"></i>'+lab+'</button>';
   }).join('');
   return '<section class="box"><h2 class="group">Lucro da empresa por dia</h2><div class="dchart"><u style="bottom:'+zero+'%"></u>'+bars+'</div>'+
-    '<p class="hint dpick"><b>Dia '+pick+' de '+MES[p[1]-1]+':</b> faturamento '+money(x.rev)+' · gastos '+money(x.cost)+' · lucro '+signed(x.profit)+'</p></section>';
+    '<p class="hint dpick"><b>'+dayTxt(pick)+':</b> faturamento '+money(x.rev)+' · gastos '+money(x.cost)+' · lucro '+signed(x.profit)+'</p></section>';
 }
 // Quanto do lucro das ofertas está pagando os gastos gerais da empresa.
 function coverage(all){
@@ -794,7 +833,7 @@ function ledger(kind){
   let h='<div class="tools"><label>Onde <select data-f="fOffer">'+opt('','Tudo',S.fOffer)+opt('_geral','Geral da empresa',S.fOffer)+S.offers.map(o=>opt(o.id,o.name,S.fOffer)).join('')+'</select></label>'+
     '<label>Categoria <select data-f="fCat">'+opt('','Todas',S.fCat)+cats.map(c=>opt(c,c,S.fCat)).join('')+'</select></label>'+
     '<div class="stats"><span><b>'+money(sumFin(l))+'</b> em '+l.length+' lançamento'+(l.length===1?'':'s')+'</span></div></div>';
-  if(!base.length) return h+'<div class="empty"><h2>Nenhum'+(gasto?' gasto':'a receita')+' em '+MESES[+S.month.slice(5)-1]+'</h2><button class="btn primary" data-act="fin-new">Novo lançamento</button></div>';
+  if(!base.length) return h+'<div class="empty"><h2>Nenhum'+(gasto?' gasto':'a receita')+' '+finRange().txt+'</h2><button class="btn primary" data-act="fin-new">Novo lançamento</button></div>';
   if(total&&cats.length>1){
     const max=by[cats[0]];
     h+='<section class="box"><h2 class="group">Por categoria <span class="hint">clique para filtrar</span></h2>'+cats.filter(c=>by[c]).map(c=>'<button class="cat catb" data-act="cat-pick" data-v="'+esc(c)+'" aria-pressed="'+(S.fCat===c)+'"><span>'+esc(c)+'</span><span class="money">'+money(by[c])+' · '+Math.round(by[c]/total*100)+'%</span>'+
@@ -826,15 +865,15 @@ function offersPage(){
   const all=monthEntries().filter(e=>e.offer), s=finStats(all), rows=offerRows(all);
   const h='<div class="tiles">'+tile('Faturamento',money(s.rev),'pos')+tile('Gastos das ofertas',money(s.cost),'neg')+tile('Lucro das ofertas',signed(s.profit),pn(s.profit))+tile('ROAS geral',roas(s))+'</div>'+
     '<div class="tools"><button class="btn sm" data-act="offer-new">Nova oferta</button></div>';
-  if(!rows) return h+'<div class="empty"><h2>Nenhuma oferta neste mês</h2><p>Cadastre uma oferta para acompanhar o faturamento e os gastos dela separadamente.</p></div>';
-  return h+'<section class="box"><h2 class="group">Resultado por oferta em '+MESES[+S.month.slice(5)-1]+'</h2>'+rows+'</section>';
+  if(!rows) return h+'<div class="empty"><h2>Nenhuma oferta com lançamentos '+finRange().txt+'</h2><p>Cadastre uma oferta para acompanhar o faturamento e os gastos dela separadamente.</p></div>';
+  return h+'<section class="box"><h2 class="group">Resultado por oferta '+finRange().txt+'</h2>'+rows+'</section>';
 }
 function offerPage(){
   const o=offerOf(S.offerId), all=monthEntries().filter(e=>e.offer===o.id), s=finStats(all);
   let h='<div class="offer-head"><button class="btn ghost sm" data-act="offer-back">← Ofertas</button><h2>'+esc(o.name)+'</h2>'+(o.status==='ativa'?'':'<span class="chip">'+esc(OSTATUS[o.status])+'</span>')+
     '<button class="btn ghost sm" data-act="offer-edit">Editar oferta</button></div>';
   h+='<div class="tiles">'+tile('Faturamento',money(s.rev),'pos')+tile('Anúncios',money(s.ads),'neg','ROAS '+roas(s))+tile('Outros gastos',money(s.other),'neg')+tile('Lucro',signed(s.profit),pn(s.profit))+'</div>';
-  if(!all.length) return h+'<div class="empty"><h2>Nenhum lançamento em '+MESES[+S.month.slice(5)-1]+'</h2><p>Lance aqui o faturamento e o gasto com anúncios desta oferta.</p><button class="btn primary" data-act="fin-new">Novo lançamento</button></div>';
+  if(!all.length) return h+'<div class="empty"><h2>Nenhum lançamento '+finRange().txt+'</h2><p>Lance aqui o faturamento e o gasto com anúncios desta oferta.</p><button class="btn primary" data-act="fin-new">Novo lançamento</button></div>';
   const days=[...new Set(all.map(e=>e.date))].sort().reverse();
   h+='<section class="box"><h2 class="group">Lucro por dia</h2><div class="tscroll"><table class="days"><thead><tr><th>Dia</th><th>Faturamento</th><th>Gastos</th><th>Lucro</th></tr></thead><tbody>'+days.map(d=>{
     const x=finStats(all.filter(e=>e.date===d)), p=d.split('-').map(Number);
@@ -843,12 +882,16 @@ function offerPage(){
   return h+entryList(all,false);
 }
 
+// Data sugerida para um lançamento novo: hoje, se estiver no período mostrado; senão, o primeiro dia do período.
+const defaultDate=()=>{ const r=finRange(), td=ymdNow(); return inRange(td,r)?td:r.from; };
+function savedOutside(d){ if(!inRange(d,finRange())) toast('Salvo em '+dayTxt(d)+' de '+d.slice(0,4)+', fora do período que está na tela.'); }
 function openEntry(id){
+  if(S.finView==='pessoal'&&!id){ openPEntry(null); return; }
   if(id){ const e=S.fin.find(x=>x.id===id); if(!e) return; S.entry=clone(e); S.entryNew=false; }
   else{
     const td=ymd(new Date()), inOffer=S.finView==='ofertas'&&!S.offerErr;
     const first=S.offers.find(o=>o.status==='ativa');
-    S.entry={id:uid('f'),kind:!inOffer&&S.genView==='receitas'?'receita':'despesa',cents:0,date:td.slice(0,7)===S.month?td:S.month+'-01',desc:'',cat:'',who:'',notes:'',
+    S.entry={id:uid('f'),kind:!inOffer&&S.genView==='receitas'?'receita':'despesa',cents:0,date:defaultDate(),desc:'',cat:'',who:'',notes:'',
       offer:inOffer?(S.offerId||(first?first.id:'')):(S.genView!=='painel'&&S.fOffer!=='_geral'?S.fOffer:''),createdAt:Date.now(),createdBy:S.me};
     S.entryNew=true;
   }
@@ -892,7 +935,112 @@ function submitEntry(){
   if(!e.date){ toast('Escolha a data.'); $('#e-date').focus(); return; }
   const n=finNorm(Object.assign({},e,{cents:c,cat:e.offer?offerCat(e):e.cat.trim(),desc:e.desc.trim(),notes:e.notes.trim()}));
   closeEntry(); saveEntry(n);
-  if(n.date.slice(0,7)!==S.month) toast('Salvo em '+monthLabel(n.date.slice(0,7)).toLowerCase()+'.');
+  savedOutside(n.date);
+}
+
+/* ---------- finanças pessoais ---------- */
+// Entradas e saídas de cada pessoa (tabela personal_finance), separadas das contas da empresa.
+// Saída tem um tipo e pode ter itens (o que foi comprado). Se o valor ficar em branco, vale a soma dos itens.
+const PTYPES=[['rapida','Compra rápida','lanche, água, coisas baratas na hora'],['lazer','Lazer','passeio, restaurante, diversão'],
+  ['contas','Contas da casa','aluguel, luz, internet, assinaturas'],['transporte','Transporte','combustível, aplicativo, ônibus'],
+  ['saude','Saúde','farmácia, consulta, academia'],['investimento','Investimento','dinheiro guardado ou aplicado'],['outros','Outros','']];
+const ptypeName=k=>{ const t=PTYPES.find(x=>x[0]===k); return t?t[1]:'Outros'; };
+function pfNorm(e){
+  const items=Array.isArray(e.items)?e.items.map(i=>({text:String(i.text||'').slice(0,120),cents:Math.max(0,Math.round(Number(i.cents)||0))})).filter(i=>i.text||i.cents):[];
+  return {id:e.id,kind:e.kind==='receita'?'receita':'saida',cents:Math.round(Number(e.cents)||0),date:e.date||ymdNow(),desc:e.desc||'',
+    type:e.kind==='receita'?'':(PTYPES.some(t=>t[0]===e.type)?e.type:'outros'),items,createdAt:e.createdAt||0,createdBy:e.createdBy||''};
+}
+// Sem user_id: o banco preenche com o login de quem grava (auth.uid()), e as regras de acesso só deixam cada login ver e mexer nos próprios lançamentos.
+const pfRow=e=>({id:e.id,kind:e.kind,amount_cents:e.cents,date:e.date,descr:e.desc,type:e.type,items:e.items,created_at:e.createdAt,created_by:e.createdBy});
+const pfFrom=r=>pfNorm({id:r.id,kind:r.kind,cents:Number(r.amount_cents),date:r.date,desc:r.descr,type:r.type,items:r.items,createdAt:Number(r.created_at)||0,createdBy:r.created_by});
+function savePEntry(e){
+  const i=S.pfin.findIndex(x=>x.id===e.id); if(i>=0) S.pfin[i]=e; else S.pfin.push(e);
+  if(!db){ ls.set('pp_pfin',JSON.stringify(S.pfin)); render(); return; }
+  render(); quickWrite(db.from('personal_finance').upsert(pfRow(e)));
+}
+function deletePEntry(id){
+  S.pfin=S.pfin.filter(x=>x.id!==id);
+  if(!db){ ls.set('pp_pfin',JSON.stringify(S.pfin)); render(); return; }
+  render(); quickWrite(db.from('personal_finance').delete().eq('id',id));
+}
+function personalPage(){
+  const r=finRange(), all=S.pfin.filter(e=>inRange(e.date,r));
+  const inc=sumFin(all.filter(e=>e.kind==='receita')), outL=all.filter(e=>e.kind==='saida'), out=sumFin(outL), inv=sumFin(outL.filter(e=>e.type==='investimento')), bal=inc-out;
+  const quick=outL.filter(e=>e.type==='rapida');
+  let h='<p class="hint">'+(S.local?'Modo local: sem login, os lançamentos pessoais ficam só neste navegador.':'Só você vê estes lançamentos'+(S.email?' (login '+esc(S.email)+')':'')+'. Eles não entram nos números da empresa.')+'</p>';
+  h+='<div class="tiles">'+tile('Entradas',money(inc),'pos')+tile('Saídas',money(out),'neg',inv?'Inclui '+money(inv)+' investidos':'')+
+    tile('Saldo',signed(bal),pn(bal),'Entradas − saídas')+tile('Compras rápidas',money(sumFin(quick)),'',quick.length+(quick.length===1?' compra':' compras'))+'</div>';
+  if(!all.length) return h+'<div class="empty"><h2>Nenhum lançamento pessoal '+r.txt+'</h2><p>Anote aqui o que entra e o que sai do seu bolso: compras rápidas, lazer, investimentos e o resto.</p><button class="btn primary" data-act="fin-new">Novo lançamento</button></div>';
+  const by={}; outL.forEach(e=>{ by[e.type]=(by[e.type]||0)+e.cents; });
+  const types=Object.keys(by).sort((a,b)=>by[b]-by[a]);
+  if(S.pType&&S.pType!=='_in'&&types.indexOf(S.pType)<0) S.pType='';
+  if(out&&types.length){
+    const max=by[types[0]];
+    h+='<section class="box"><h2 class="group">Saídas por tipo <span class="hint">clique para filtrar</span></h2>'+types.map(t=>'<button class="cat catb" data-act="ptype-pick" data-v="'+t+'" aria-pressed="'+(S.pType===t)+'"><span>'+esc(ptypeName(t))+'</span><span class="money">'+money(by[t])+' · '+Math.round(by[t]/out*100)+'%</span>'+
+      '<span class="cbar"><i style="width:'+Math.max(2,Math.round(by[t]/max*100))+'%"></i></span></button>').join('')+'</section>';
+  }
+  const l=S.pType==='_in'?all.filter(e=>e.kind==='receita'):S.pType?outL.filter(e=>e.type===S.pType):all;
+  h+='<div class="tools"><label>Mostrar <select data-f="pType">'+opt('','Tudo',S.pType)+opt('_in','Só entradas',S.pType)+types.map(t=>opt(t,ptypeName(t),S.pType)).join('')+'</select></label>'+
+    '<div class="stats"><span><b>'+l.length+'</b> lançamento'+(l.length===1?'':'s')+'</span></div></div>';
+  if(!l.length) return h+'<div class="empty"><h2>Nada com esse filtro</h2></div>';
+  const rows=l.slice().sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt-a.createdAt).map(e=>{
+    const p=e.date.split('-').map(Number), its=e.items.map(i=>i.text).filter(Boolean);
+    const sub=(e.kind==='receita'?'Entrada':ptypeName(e.type))+(its.length?' · '+its.join(', '):'');
+    return '<li><button data-act="pf-open" data-id="'+esc(e.id)+'"><span class="ld">'+p[2]+' '+MES[p[1]-1]+'</span><span class="lt"><b>'+esc(e.desc||(e.kind==='receita'?'Entrada':ptypeName(e.type)))+'</b><small>'+esc(sub)+'</small></span>'+
+      '<span class="money '+(e.kind==='receita'?'pos':'neg')+'">'+(e.kind==='receita'?'+ ':'− ')+money(e.cents)+'</span></button></li>';
+  }).join('');
+  return h+'<ul class="ledger">'+rows+'</ul>';
+}
+function openPEntry(id){
+  if(id){ const e=S.pfin.find(x=>x.id===id); if(!e) return; S.pentry=clone(e); S.pentry.items.forEach(i=>{ i.amt=i.cents?centsTxt(i.cents):''; }); S.pentryNew=false; }
+  else{
+    S.pentry={id:uid('p'),kind:S.pType==='_in'?'receita':'saida',cents:0,date:defaultDate(),desc:'',type:S.pType&&S.pType!=='_in'?S.pType:'rapida',items:[],createdAt:Date.now(),createdBy:S.me};
+    S.pentryNew=true;
+  }
+  S.pentryDel=false; renderPEntry(); $('#pe-amount').focus();
+}
+function readPEntry(){
+  const e=S.pentry; if(!e||!$('#pfForm')) return;
+  e.amt=$('#pe-amount').value; e.date=$('#pe-date').value; e.desc=$('#pe-desc').value;
+  const t=$('#pe-type'); if(t) e.type=t.value;
+  e.items.forEach((it,i)=>{ it.text=$('#pi-t'+i).value; it.amt=$('#pi-v'+i).value; });
+}
+const itemsSum=e=>e.items.reduce((a,i)=>{ const c=parseMoney(i.amt); return a+(c>0?c:0); },0);
+function renderPEntry(){
+  const e=S.pentry, el=$('#fin'), out=e.kind==='saida'; el.hidden=false;
+  const amt=e.amt!=null?e.amt:(e.cents?centsTxt(e.cents):''), sum=itemsSum(e);
+  const items=e.items.map((it,i)=>'<li><input type="text" id="pi-t'+i+'" data-pi="'+i+'" maxlength="120" autocomplete="off" placeholder="Item, ex.: água" value="'+esc(it.text)+'" aria-label="Item '+(i+1)+'">'+
+    '<input type="text" id="pi-v'+i+'" data-piv="'+i+'" class="iv" inputmode="decimal" autocomplete="off" placeholder="R$ (opcional)" value="'+esc(it.amt||'')+'" aria-label="Valor do item '+(i+1)+'">'+
+    '<button type="button" class="mini" data-act="pf-item-del" data-i="'+i+'" aria-label="Tirar item '+(i+1)+'" title="Tirar">✕</button></li>').join('');
+  el.innerHTML='<div class="scrim"></div><div class="dialog" role="dialog" aria-modal="true" aria-label="Lançamento pessoal">'+
+    '<h2>'+(S.pentryNew?'Novo lançamento pessoal':'Lançamento pessoal')+'</h2>'+
+    '<form id="pfForm" class="fin-form">'+
+    '<div class="seg">'+[['saida','Saída'],['receita','Entrada']].map(k=>'<button type="button" data-act="pf-kind" data-v="'+k[0]+'" aria-pressed="'+(e.kind===k[0])+'">'+k[1]+'</button>').join('')+'</div>'+
+    '<div class="fields"><label class="fld">Valor (R$)<input type="text" id="pe-amount" inputmode="decimal" autocomplete="off" placeholder="'+(sum?centsTxt(sum):'0,00')+'" value="'+esc(amt)+'"></label>'+
+    '<label class="fld">Data<input type="date" id="pe-date" value="'+esc(e.date)+'"></label></div>'+
+    '<label class="fld">Descrição<input type="text" id="pe-desc" maxlength="160" autocomplete="off" placeholder="'+(out?'Ex.: mercado, água depois do futebol':'Ex.: pró-labore, venda de algo')+'" value="'+esc(e.desc)+'"></label>'+
+    (out?'<label class="fld">Tipo<select id="pe-type">'+PTYPES.map(t=>opt(t[0],t[1]+(t[2]?' ('+t[2]+')':''),e.type)).join('')+'</select></label>':'')+
+    (out?'<div class="sec"><h4>Itens <span>opcional<span id="pi-sum">'+(sum?' · soma '+money(sum):'')+'</span></span></h4>'+
+      (e.items.length?'<ul class="items">'+items+'</ul>':'')+
+      '<button type="button" class="btn ghost sm" data-act="pf-item-add">+ Adicionar item</button>'+
+      '<p class="hint">Se deixar o valor lá em cima em branco, vale a soma dos itens.</p></div>':'')+
+    '<div class="panel-foot">'+(S.pentryDel
+      ?'<span class="hint">Excluir este lançamento?</span><button type="button" class="btn danger" data-act="pf-del-yes">Excluir</button><button type="button" class="btn ghost" data-act="pf-del-no">Cancelar</button>'
+      :'<button type="submit" class="btn primary">Salvar</button><button type="button" class="btn ghost" data-act="pf-cancel">Cancelar</button>'+(S.pentryNew?'':'<button type="button" class="btn danger" data-act="pf-del-ask">Excluir</button>'))+
+    '</div></form></div>';
+}
+function closePEntry(){ S.pentry=null; $('#fin').hidden=true; $('#fin').innerHTML=''; }
+function submitPEntry(){
+  readPEntry();
+  const e=S.pentry;
+  if(e.kind==='receita') e.items=[];
+  const items=e.items.map(i=>({text:i.text.trim(),cents:parseMoney(i.amt)>0?parseMoney(i.amt):0})).filter(i=>i.text||i.cents);
+  const typed=String(e.amt||'').trim(), c=typed?parseMoney(typed):itemsSum(e);
+  if(!(c>0)){ toast(typed||!items.length?'Digite um valor maior que zero, por exemplo 12,50.':'Digite o valor total ou o valor dos itens.'); $('#pe-amount').focus(); return; }
+  if(!e.date){ toast('Escolha a data.'); $('#pe-date').focus(); return; }
+  const n=pfNorm(Object.assign({},e,{cents:c,desc:e.desc.trim(),items}));
+  closePEntry(); savePEntry(n);
+  savedOutside(n.date);
 }
 
 /* ---------- cadastro de ofertas ---------- */
@@ -1011,7 +1159,20 @@ document.addEventListener('click',e=>{
   else if(a==='theme'){ const t=isDark()?'light':'dark'; document.documentElement.setAttribute('data-theme',t); ls.set('pp_theme',t); renderBar(); }
   else if(a==='section'){ S.section=b.dataset.v; ls.set('pp_section',S.section); render(); }
   else if(a==='month'){ S.month=addMonths(S.month,+b.dataset.d); S.fCat=''; S.dayPick=''; render(); }
-  else if(a==='finview'){ S.finView=b.dataset.v; S.offerId=''; S.fCat=''; ls.set('pp_finview',S.finView); render(); }
+  else if(a==='finper'){
+    const v=b.dataset.v, cur=ymdNow().slice(0,7);
+    if(v==='mes'||v==='mespas'){ S.finPer='mes'; S.month=v==='mes'?cur:addMonths(cur,-1); } else S.finPer=v;
+    ls.set('pp_finper',S.finPer); S.fCat=''; S.dayPick=''; render();
+  }
+  else if(a==='finview'){ S.finView=b.dataset.v; S.offerId=''; S.fCat=''; S.pType=''; ls.set('pp_finview',S.finView); render(); }
+  else if(a==='ptype-pick'){ S.pType=S.pType===b.dataset.v?'':b.dataset.v; render(); }
+  else if(a==='pf-open') openPEntry(id);
+  else if(a==='pf-kind'){ readPEntry(); S.pentry.kind=b.dataset.v; renderPEntry(); }
+  else if(a==='pf-item-add'){ readPEntry(); S.pentry.items.push({text:'',cents:0,amt:''}); renderPEntry(); $('#pi-t'+(S.pentry.items.length-1)).focus(); }
+  else if(a==='pf-item-del'){ readPEntry(); S.pentry.items.splice(+b.dataset.i,1); renderPEntry(); }
+  else if(a==='pf-cancel') closePEntry();
+  else if(a==='pf-del-ask'||a==='pf-del-no'){ readPEntry(); S.pentryDel=a==='pf-del-ask'; renderPEntry(); }
+  else if(a==='pf-del-yes'){ const pid=S.pentry.id; closePEntry(); deletePEntry(pid); }
   else if(a==='offer-open'){ S.offerId=id; S.finView='ofertas'; ls.set('pp_finview','ofertas'); render(); }
   else if(a==='genview'){ S.genView=b.dataset.v; S.fCat=''; S.fOffer=''; ls.set('pp_genview',S.genView); render(); }
   else if(a==='day-pick'){ S.dayPick=b.dataset.d; render(); }
@@ -1102,15 +1263,20 @@ document.addEventListener('change',e=>{
   }
 });
 document.addEventListener('input',e=>{
-  const t=e.target; if(!S.draft) return;
+  const t=e.target;
+  if(t.dataset.piv!==undefined&&S.pentry){ readPEntry(); const s=itemsSum(S.pentry); $('#pe-amount').placeholder=s?centsTxt(s):'0,00'; $('#pi-sum').textContent=s?' · soma '+money(s):''; return; }
+  if(!S.draft) return;
   if(t.dataset.st!==undefined){ S.draft.steps[+t.dataset.st].text=t.value; touch(false); }
   else if(t.dataset.k&&(t.id==='f-title'||t.id==='f-desc')){ S.draft[t.dataset.k]=t.value; touch(false); }
 });
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){ if(S.tplOpen&&!S.draft){ S.tplOpen=false; render(); } else if(S.offerForm) closeOffer(); else if(S.entry) closeEntry(); else if(S.draft) closeSheet(); else if(S.teamOpen){ S.teamOpen=false; render(); } return; }
+  if(e.key==='Escape'){ if(S.tplOpen&&!S.draft){ S.tplOpen=false; render(); } else if(S.offerForm) closeOffer(); else if(S.entry) closeEntry(); else if(S.pentry) closePEntry(); else if(S.draft) closeSheet(); else if(S.teamOpen){ S.teamOpen=false; render(); } return; }
   if(e.key!=='Enter') return;
   const t=e.target;
   if(t.id==='f-rename'){ e.preventDefault(); saveRename(S.editMember); }
+  // Nos itens: Enter no nome vai para o valor; Enter no valor cria o próximo item.
+  else if(t.dataset&&t.dataset.pi!==undefined){ e.preventDefault(); $('#pi-v'+t.dataset.pi).focus(); }
+  else if(t.dataset&&t.dataset.piv!==undefined){ e.preventDefault(); readPEntry(); S.pentry.items.push({text:'',cents:0,amt:''}); renderPEntry(); $('#pi-t'+(S.pentry.items.length-1)).focus(); }
   else if(t.id==='f-title'){ e.preventDefault(); $('#f-newstep').focus(); }
   else if(t.id==='f-newstep'){ e.preventDefault(); addSteps(t.value); t.value=''; }
   else if(t.dataset&&t.dataset.st!==undefined){ e.preventDefault(); $('#f-newstep').focus(); }
@@ -1134,6 +1300,7 @@ document.addEventListener('submit',e=>{
   }
   if(e.target.id==='finForm'){ e.preventDefault(); submitEntry(); return; }
   if(e.target.id==='offerForm'){ e.preventDefault(); submitOffer(); return; }
+  if(e.target.id==='pfForm'){ e.preventDefault(); submitPEntry(); return; }
   if(e.target.id!=='addMember') return;
   e.preventDefault();
   const inp=$('#f-member'), name=inp.value.trim(); if(!name) return;

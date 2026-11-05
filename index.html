@@ -231,6 +231,10 @@ button.dcol:hover,.dcol.on{background:var(--sunken)}
 .fin-form .seg{align-self:flex-start}
 .fin-form .panel-foot{padding-top:4px}
 .per-seg{flex-wrap:wrap;max-width:100%}
+.cash{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;box-shadow:var(--shadow)}
+.cash div{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px}
+.cash span{font-size:14px;font-weight:600;color:var(--muted)}
+.cash b{font-family:var(--display);font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}
 .items{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .items li{display:flex;gap:6px;align-items:center}
 .items input{flex:1 1 0;min-width:0}
@@ -729,6 +733,16 @@ const inRange=(d,r)=>d>=r.from&&d<=r.to;
 const rangeDays=r=>{ const out=[]; for(let d=r.from;d<=r.to;d=addDays(d,1)) out.push(d); return out; };
 const monthEntries=()=>{ const r=finRange(); return S.fin.filter(e=>inRange(e.date,r)); };
 const dayTxt=d=>{ const p=d.split('-').map(Number); return p[2]+' de '+MES[p[1]-1]; };
+// Caixa da empresa: tudo que já entrou menos tudo que já saiu, sem filtro de período, começando do zero
+// (decisão do dono em 05/11/2026). Conta todo gasto, inclusive os pagos por um sócio. Lançamentos com data futura ficam de fora.
+function cashBox(){
+  const td=ymdNow(), past=S.fin.filter(e=>e.date<=td), fut=S.fin.length-past.length;
+  const inc=sumFin(past.filter(e=>e.kind==='receita')), out=sumFin(past.filter(e=>e.kind==='despesa')), bal=inc-out;
+  const first=past.reduce((m,e)=>!m||e.date<m?e.date:m,'');
+  return '<section class="cash"><div><span>Caixa da empresa hoje</span><b class="'+pn(bal)+'">'+signed(bal)+'</b></div>'+
+    '<p class="hint">Tudo que entrou ('+money(inc)+') menos tudo que saiu ('+money(out)+')'+(first?', desde '+dayTxt(first)+' de '+first.slice(0,4):'')+'. Não muda com o período abaixo.'+
+    (fut?' Não inclui '+fut+' lançamento'+(fut>1?'s':'')+' com data futura.':'')+'</p></section>';
+}
 // Barra de períodos no topo de Finanças. No modo mês, as setas andam para meses anteriores e seguintes.
 function periodBar(){
   const cur=ymdNow().slice(0,7), prev=addMonths(cur,-1), on=S.finPer==='mes'?(S.month===cur?'mes':S.month===prev?'mespas':''):S.finPer;
@@ -760,6 +774,7 @@ function renderFin(){
   if(S.finErr){ app.innerHTML='<p class="notice">A parte de finanças ainda não foi ativada no banco de dados. É preciso rodar o trecho de finanças do arquivo supabase.sql no Supabase (SQL Editor).</p>'; return; }
   let h='';
   if(S.local) h+='<p class="notice">Modo local: o banco de dados ainda não foi configurado (config.js), então os lançamentos ficam só neste navegador.</p>';
+  if(S.finView!=='pessoal') h+=cashBox();
   h+=periodBar();
   if(S.finView==='pessoal') h+=S.pfinErr?'<p class="notice">As finanças pessoais ainda não foram ativadas no banco de dados. É preciso rodar o trecho "Finanças pessoais" do arquivo supabase.sql no Supabase (SQL Editor).</p>':personalPage();
   else if(S.finView==='ofertas') h+=S.offerErr?'<p class="notice">As ofertas ainda não foram ativadas no banco de dados. É preciso rodar o trecho de ofertas do arquivo supabase.sql no Supabase (SQL Editor).</p>':(offerOf(S.offerId)?offerPage():offersPage());
